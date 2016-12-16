@@ -1,3 +1,6 @@
 [submodule "Term1/Resources/CarND-LaneLines-P1"]
 	path = Term1/Resources/CarND-LaneLines-P1
 	url = https://github.com/udacity/CarND-LaneLines-P1.git
+[submodule "Term1/Resources/CarND-Traffic-Signs"]
+	path = Term1/Resources/CarND-Traffic-Signs
+	url = https://github.com/udacity/CarND-Traffic-Signs.git
