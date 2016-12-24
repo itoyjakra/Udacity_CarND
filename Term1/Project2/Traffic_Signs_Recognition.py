@@ -75,33 +75,20 @@ def maxpool2d(x, k=2):
 def min_max_scale(image_data, low=0.1, high=0.9):
     return low + (image_data - np.min(image_data)) * (high - low) / (np.max(image_data) - np.min(image_data))
 
+
 def Network(x, dropout):
     
-    weights = {
-        'wc1': tf.get_variable('wc1', shape=([3, 3, 1, 6]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
-        'wc2': tf.get_variable('wc2', shape=([3, 3, 6, 16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
-        'wd1': tf.get_variable('wd1', shape=([7*7*16, 256]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
-        'out': tf.get_variable('w_out', shape=([256, n_classes]), initializer=tf.contrib.layers.xavier_initializer_conv2d())
-    }
-
-    biases = {
-        'bc1': tf.get_variable('bc1', shape=([6]), initializer=tf.contrib.layers.xavier_initializer()),
-        'bc2': tf.get_variable('bc2', shape=([16]), initializer=tf.contrib.layers.xavier_initializer()),
-        'bd1': tf.get_variable('bd1', shape=([256]), initializer=tf.contrib.layers.xavier_initializer()),
-        'out': tf.get_variable('b_out', shape=([n_classes]), initializer=tf.contrib.layers.xavier_initializer())
-    }
-
     x = tf.reshape(x, (-1, image_shape[0], image_shape[1], 1))
     
     # Conv Layer 1
     conv1 = conv2d(x, weights['wc1'], biases['bc1'])
     conv1 = maxpool2d(conv1, k=2)
-    conv1 = tf.nn.dropout(conv1, dropout)
+    #conv1 = tf.nn.dropout(conv1, dropout)
 
     # Conv Layer 2
     conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
     conv2 = maxpool2d(conv2, k=2)
-    conv2 = tf.nn.dropout(conv2, dropout)
+    #conv2 = tf.nn.dropout(conv2, dropout)
 
     # FC Layer
     fc1 = tf.contrib.layers.flatten(conv2)
@@ -109,6 +96,7 @@ def Network(x, dropout):
     fc1 = tf.nn.relu(fc1)
 
     # Dropout
+    #fc1 = tf.nn.dropout(fc1, 0.2)
     fc1 = tf.nn.dropout(fc1, dropout)
 
     # Out Layer
@@ -123,7 +111,7 @@ def evaluate(X_data, y_data):
     sess = tf.get_default_session()
     for offset in range(0, num_examples, BATCH_SIZE):
         batch_x, batch_y = X_data[offset:offset+BATCH_SIZE], y_data[offset:offset+BATCH_SIZE]
-        loss, accuracy =  sess.run([loss_op, accuracy_op], feed_dict={X: batch_x, y: batch_y})
+        loss, accuracy =  sess.run([loss_op, accuracy_op], feed_dict={X: batch_x, y: batch_y, keep_prob: 1.0})
         total_accuracy += (accuracy * batch_x.shape[0])
         total_loss     += (loss * batch_x.shape[0])
     return total_loss / num_examples, total_accuracy / num_examples
@@ -135,7 +123,7 @@ def find_error(X_data, y_data):
     wrong_list = np.array([])
     for offset in range(0, num_examples, BATCH_SIZE):
         batch_x, batch_y = X_data[offset:offset+BATCH_SIZE], y_data[offset:offset+BATCH_SIZE]
-        wrong =  sess.run(wrong_prediction, feed_dict={X: batch_x, y: batch_y})
+        wrong =  sess.run(wrong_prediction, feed_dict={X: batch_x, y: batch_y, keep_prob: 1.0})
         #print (offset, len(batch_y[wrong].argmax(axis=1)))
         wrong_list = np.append(wrong_list, batch_y[wrong].argmax(axis=1))
     return wrong_list
@@ -177,19 +165,36 @@ features_test = min_max_scale(features_test)
 
 # split train set into training and validation
 from sklearn.cross_validation import train_test_split
-X_train, X_valid, y_train, y_valid = train_test_split(features_train, labels_train, test_size=0.2, random_state=42)
+X_train, X_valid, y_train, y_valid = train_test_split(features_train, labels_train, test_size=0.3, random_state=42)
 print (X_train.shape, y_train.shape, X_valid.shape, y_valid.shape)
 
 y_train = convertToOneHot(y_train)
 y_valid = convertToOneHot(y_valid)
 labels_test = convertToOneHot(labels_test)
 
+# initialize weights
+weights = {
+    'wc1': tf.get_variable('wc1', shape=([7, 7, 1, 6]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'wc2': tf.get_variable('wc2', shape=([7, 7, 6, 16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'wd1': tf.get_variable('wd1', shape=([4*4*16, 256]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'out': tf.get_variable('w_out', shape=([256, n_classes]), initializer=tf.contrib.layers.xavier_initializer_conv2d())
+}
+
+biases = {
+    'bc1': tf.get_variable('bc1', shape=([6]), initializer=tf.contrib.layers.xavier_initializer()),
+    'bc2': tf.get_variable('bc2', shape=([16]), initializer=tf.contrib.layers.xavier_initializer()),
+    'bd1': tf.get_variable('bd1', shape=([256]), initializer=tf.contrib.layers.xavier_initializer()),
+    'out': tf.get_variable('b_out', shape=([n_classes]), initializer=tf.contrib.layers.xavier_initializer())
+}
+
 
 # Create the Graph
 
-keep_prob = 0.80
+#keep_prob = 0.80
 X = tf.placeholder(tf.float32, (None, image_shape[0]*image_shape[1]))
 y = tf.placeholder(tf.float32, (None, n_classes))
+keep_prob = tf.placeholder(tf.float32)
+
 fc2 = Network(X, keep_prob)
 
 loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(fc2, y))
@@ -215,8 +220,9 @@ from time import time
 
 # Measurements use for graphing loss and accuracy
 
-#EPOCHS = 10
+EPOCHS = 25
 log_batch_step = 50
+dropout_keep_prob = 0.5
 batches = []
 loss_batch = []
 train_acc_batch = []
@@ -243,44 +249,9 @@ with tf.Session() as sess:
                 #tf.add_check_numerics_ops()
                 batch_x = X_train[step*BATCH_SIZE:(step+1)*BATCH_SIZE,...]
                 batch_y = y_train[step*BATCH_SIZE:(step+1)*BATCH_SIZE]
-                loss = sess.run(train_op, feed_dict={X: batch_x, y: batch_y})
+                loss = sess.run(train_op, feed_dict={X: batch_x, y: batch_y, keep_prob: dropout_keep_prob})
                 
                 # Log every 50 batches
-                '''
-                if not step % log_batch_step:
-                    # Calculate Training and Validation accuracy
-                    training_accuracy, training_loss = sess.run([accuracy_op, loss_op], feed_dict=train_feed_dict)
-                    validation_accuracy, validation_loss = sess.run([accuracy_op, loss_op], feed_dict=valid_feed_dict)
-                    #print (i, step, training_accuracy, training_loss, validation_accuracy, validation_loss)
-                    lo, pred = sess.run([loss_op, prediction], feed_dict={X: batch_x, y: batch_y})
-                    print ('loss = ', lo)
-
-                    print ('pred shape = ', pred.shape)
-                    with tf.device('/gpu:0'):
-                        ce = -tf.reduce_sum(batch_y * tf.log(pred + 1e-6), reduction_indices=1)
-                    print ('ce shape = ', ce.get_shape())
-                    print ('loss = ', lo)
-                    ce_arr = ce.eval()
-                    if (ce_arr < 0).any():
-                        print (ce_arr)
-                        for i in range(len(pred)):
-                            print (pred[i])
-                        assert 1==2
-                    #print ('loss = ', loss)
-                    
-                # diagnosis
-                #if (training_loss < 1000) and (training_accuracy < 0.1):
-                #   assert 3==4
-                #
-
-                # Log batches
-                previous_batch = batches[-1] if batches else 0
-                batches.append(log_batch_step + previous_batch)
-                train_acc_batch.append(training_accuracy)
-                valid_acc_batch.append(validation_accuracy)
-                train_loss_batch.append(training_loss)
-                valid_loss_batch.append(validation_loss)
-                '''
                 
             tra_loss, tra_acc = evaluate(X_train, y_train)
             train_acc_epoch.append(tra_acc)
