@@ -60,50 +60,65 @@ def convertToOneHot(vector, num_classes=None):
     return result.astype(int)
 
 
-def conv2d(x, W, b, strides=1):
+def conv2d(x, W, b, stride=1, padding='VALID'):
     # Conv2D wrapper, with bias and relu activation
-    x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='VALID')
+    x = tf.nn.conv2d(x, W, padding=padding, strides=[1, stride, stride, 1])
     x = tf.nn.bias_add(x, b)
     return tf.nn.relu(x)
 
 
-def maxpool2d(x, k=2):
+def maxpool2d(x, k=2, stride=2):
     # MaxPool2D wrapper
-    return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
+    return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, stride, stride, 1], padding='SAME')
 
 
 def min_max_scale(image_data, low=0.1, high=0.9):
     return low + (image_data - np.min(image_data)) * (high - low) / (np.max(image_data) - np.min(image_data))
 
+def inception(input_layer):
+    # input 13x13x32
+    conv_1x1 = conv2d(input_layer, weights['winc1'], biases['binc1'], padding='SAME') # 13x13x16
+    conv_3x3 = conv2d(conv_1x1, weights['winc3'], biases['binc3'], padding='SAME') # 13x13x32
+    conv_5x5 = conv2d(conv_1x1, weights['winc5'], biases['binc5'], padding='SAME') # 13x13x32
+    max_pool = maxpool2d(input_layer, k=2, stride=1) # 13x13x32
+    max_pool_conv_1x1 = conv2d(max_pool, weights['winpc1'], biases['binpc1'], padding='SAME') # 13x13x32
+    conv_d1x1 = conv2d(input_layer, weights['windc1'], biases['bindc1'], padding='SAME') # 13x13x16
+    output_layer = tf.concat(3, [conv_3x3, conv_5x5, conv_d1x1, max_pool_conv_1x1]) # 13x13x112
+    return output_layer
 
 def Network(x, dropout):
     
     x = tf.reshape(x, (-1, image_shape[0], image_shape[1], 1))
     
     # Conv Layer 1
-    conv1 = conv2d(x, weights['wc1'], biases['bc1'])
-    conv1 = maxpool2d(conv1, k=2)
-    #conv1 = tf.nn.dropout(conv1, dropout)
+    conv1 = conv2d(x, weights['wc1'], biases['bc1']) # 26x26x32
+    conv1 = maxpool2d(conv1, k=2) # 13x13x32
 
+    '''
     # Conv Layer 2
     conv2 = conv2d(conv1, weights['wc2'], biases['bc2'])
     conv2 = maxpool2d(conv2, k=2)
     #conv2 = tf.nn.dropout(conv2, dropout)
+    '''
 
-    # FC Layer
-    fc1 = tf.contrib.layers.flatten(conv2)
+    # Inception Layer
+    incp1 = inception(conv1)
+
+    # FC Layer 1
+    fc1 = tf.contrib.layers.flatten(incp1)
     fc1 = tf.add(tf.matmul(fc1, weights['wd1']), biases['bd1'])
     fc1 = tf.nn.relu(fc1)
-
-    # Dropout
-    #fc1 = tf.nn.dropout(fc1, 0.2)
     fc1 = tf.nn.dropout(fc1, dropout)
 
+    # FC Layer 2
+    fc2 = tf.add(tf.matmul(fc1, weights['wd2']), biases['bd2'])
+    fc2 = tf.nn.relu(fc2)
+    fc2 = tf.nn.dropout(fc2, dropout)
+
     # Out Layer
-    out = tf.add(tf.matmul(fc1, weights['out']), biases['out'])
+    out = tf.add(tf.matmul(fc2, weights['out']), biases['out'])
     
     return out
-
 
 def evaluate(X_data, y_data):
     num_examples = len(X_data)
@@ -144,6 +159,7 @@ print (labels_test.shape)
 from scipy import ndimage
 
 '''
+'''
 new_images_1 = np.array([ndimage.rotate(image, -10, reshape=False, mode='nearest') for image in features_train])
 new_images_2 = np.array([ndimage.rotate(image, 20, reshape=False, mode='nearest') for image in features_train])
 new_images_3 = np.array([ndimage.shift(image, (5, 5), mode='nearest') for image in features_train])
@@ -151,6 +167,7 @@ new_images_4 = np.array([ndimage.shift(image, (-5, -5), mode='nearest') for imag
 
 features_train = np.vstack((features_train, new_images_1, new_images_2, new_images_3, new_images_4))
 labels_train = np.array(list(labels_train)*5)
+'''
 '''
 print ('new training set = ', features_train.shape)
 print ('new label set = ', labels_train.shape)
@@ -172,18 +189,29 @@ y_train = convertToOneHot(y_train)
 y_valid = convertToOneHot(y_valid)
 labels_test = convertToOneHot(labels_test)
 
-# initialize weights
+# weights and biases
+f = 7
 weights = {
-    'wc1': tf.get_variable('wc1', shape=([7, 7, 1, 6]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
-    'wc2': tf.get_variable('wc2', shape=([7, 7, 6, 16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
-    'wd1': tf.get_variable('wd1', shape=([4*4*16, 256]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'wc1': tf.get_variable('wc1', shape=([f, f, 1, 32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'winc1': tf.get_variable('winc1', shape=([1, 1, 32, 16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'winc3': tf.get_variable('winc3', shape=([3, 3, 16, 32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'winc5': tf.get_variable('winc5', shape=([5, 5, 16, 32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'winpc1': tf.get_variable('winpc1', shape=([1, 1, 32, 32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'windc1': tf.get_variable('widnc1', shape=([1, 1, 32, 16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'wd1': tf.get_variable('wd1', shape=([13*13*112, 1024]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'wd2': tf.get_variable('wd2', shape=([1024, 256]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
     'out': tf.get_variable('w_out', shape=([256, n_classes]), initializer=tf.contrib.layers.xavier_initializer_conv2d())
 }
 
 biases = {
-    'bc1': tf.get_variable('bc1', shape=([6]), initializer=tf.contrib.layers.xavier_initializer()),
-    'bc2': tf.get_variable('bc2', shape=([16]), initializer=tf.contrib.layers.xavier_initializer()),
-    'bd1': tf.get_variable('bd1', shape=([256]), initializer=tf.contrib.layers.xavier_initializer()),
+    'bc1': tf.get_variable('bc1', shape=([32]), initializer=tf.contrib.layers.xavier_initializer()),
+    'binc1': tf.get_variable('binc1', shape=([16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'binc3': tf.get_variable('binc3', shape=([32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'binc5': tf.get_variable('binc5', shape=([32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'binpc1': tf.get_variable('binpc1', shape=([32]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'bindc1': tf.get_variable('bindc1', shape=([16]), initializer=tf.contrib.layers.xavier_initializer_conv2d()),
+    'bd1': tf.get_variable('bd1', shape=([1024]), initializer=tf.contrib.layers.xavier_initializer()),
+    'bd2': tf.get_variable('bd2', shape=([256]), initializer=tf.contrib.layers.xavier_initializer()),
     'out': tf.get_variable('b_out', shape=([n_classes]), initializer=tf.contrib.layers.xavier_initializer())
 }
 
@@ -220,15 +248,8 @@ from time import time
 
 # Measurements use for graphing loss and accuracy
 
-EPOCHS = 25
-log_batch_step = 50
-dropout_keep_prob = 0.5
-batches = []
-loss_batch = []
-train_acc_batch = []
-valid_acc_batch = []
-train_loss_batch = []
-valid_loss_batch = []
+EPOCHS = 50
+dropout_keep_prob = 0.4
 
 train_acc_epoch = []
 train_loss_epoch = []
@@ -250,8 +271,6 @@ with tf.Session() as sess:
                 batch_x = X_train[step*BATCH_SIZE:(step+1)*BATCH_SIZE,...]
                 batch_y = y_train[step*BATCH_SIZE:(step+1)*BATCH_SIZE]
                 loss = sess.run(train_op, feed_dict={X: batch_x, y: batch_y, keep_prob: dropout_keep_prob})
-                
-                # Log every 50 batches
                 
             tra_loss, tra_acc = evaluate(X_train, y_train)
             train_acc_epoch.append(tra_acc)
