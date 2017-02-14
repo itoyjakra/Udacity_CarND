@@ -9,17 +9,40 @@ from sklearn.model_selection import ParameterGrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 
-def read_images():
+def read_images(dataset):
     # Read in cars and notcars
-    cars = glob.glob('smallset/vehicles_smallset/**/*.jpeg', recursive=True)
-    print ('number of cars = ', len(cars))
-    notcars = glob.glob('smallset/non-vehicles_smallset/**/*.jpeg', recursive=True)
-    print ('number of non-cars = ', len(notcars))
-    print ('image size for cars: ', mpimg.imread(cars[0]).shape)
-    print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
-    image_shape = mpimg.imread(cars[0]).shape[:2]
+    if dataset == 'small':
+        cars = glob.glob('smallset/vehicles_smallset/**/*.jpeg', recursive=True)
+        print ('number of cars = ', len(cars))
+        notcars = glob.glob('smallset/non-vehicles_smallset/**/*.jpeg', recursive=True)
+        print ('number of non-cars = ', len(notcars))
+        print ('image size for cars: ', mpimg.imread(cars[0]).shape)
+        print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
+        image_shape = mpimg.imread(cars[0]).shape[:2]
+        image_type = 'jpeg'
+    elif dataset == 'GTI':
+        cars = glob.glob('vehicles/GTI*/*.png', recursive=True)
+        print ('number of cars = ', len(cars))
+        notcars = glob.glob('non-vehicles/GTI*/*.png', recursive=True)
+        print ('number of non-cars = ', len(notcars))
+        print ('image size for cars: ', mpimg.imread(cars[0]).shape)
+        print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
+        image_shape = mpimg.imread(cars[0]).shape[:2]
+        image_type = 'png'
+    elif dataset == 'all':
+        cars = glob.glob('vehicles/**/*.png', recursive=True)
+        print ('number of cars = ', len(cars))
+        notcars = glob.glob('non-vehicles/**/*.png', recursive=True)
+        print ('number of non-cars = ', len(notcars))
+        print ('image size for cars: ', mpimg.imread(cars[0]).shape)
+        print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
+        image_shape = mpimg.imread(cars[0]).shape[:2]
+        image_type = 'png'
+    else:
+        print ('invalid data set')
+        return None
 
-    return (cars, notcars, image_shape)
+    return (cars, notcars, image_type, image_shape)
 
 def sample(cars, notcars):
     # Reduce the sample size because
@@ -30,10 +53,10 @@ def sample(cars, notcars):
 
     return (cars, notcars)
 
-def param_search():
+def param_search(dataset):
 
     # read the images
-    imgs = read_images()
+    imgs = read_images(dataset)
 
     # sample if needed
     #cars, notcars = sample(cars, notcars)
@@ -53,15 +76,15 @@ def param_search():
     y_start_stop = [None, None] # Min and max in y to search in slide_window()
     '''
 
-    param_grid = {'color_space': ['LUV', 'YCrCb'], 
+    param_grid = {'color_space': ['YCrCb'],
                   'orient': [9],
                   'pix_per_cell': [8],
                   'cell_per_block': [2],
                   'hog_channel': ["ALL"],
-                  'spatial_size': [(8, 8), (10, 10), (12, 12), (14, 14), (16, 16)],
-                  'hist_bins': [10], 
+                  'spatial_size': [(32, 32)],
+                  'hist_bins': [10],
                   'spatial_feat': [True],
-                  'hist_feat': [True, False],
+                  'hist_feat': [False],
                   'hog_feat': [True],
                   'y_start_stop': [[None, None]]
                  }
@@ -70,7 +93,13 @@ def param_search():
         if len(value) > 1:
             param_print_list.append(key)
 
-    print (param_print_list)
+    print ('parameters used ...')
+    for key, val in param_grid.items():
+        print (key, ':', val)
+
+    if len(param_print_list) > 0:
+        print ('parameters used in grid search ...')
+        print (param_print_list)
 
     for i, params in enumerate(list(ParameterGrid(param_grid))):
         acc = runme_p(i, imgs, params)
@@ -84,7 +113,7 @@ def param_search():
 def runme_p(index, imgs, params):
 
     # get image info
-    cars, notcars, image_shape = imgs
+    cars, notcars, image_type, image_shape = imgs
 
     # extract parameters from dictionary
     color_space = params['color_space']
@@ -97,21 +126,21 @@ def runme_p(index, imgs, params):
     spatial_feat = params['spatial_feat']
     hist_feat = params['hist_feat']
     hog_feat = params['hog_feat']
-    
-    car_features = ro.extract_features(cars, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
+
+    car_features = ro.extract_features(cars, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
-    notcar_features = ro.extract_features(notcars, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
+    notcar_features = ro.extract_features(notcars, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
 
-    X = np.vstack((car_features, notcar_features)).astype(np.float64)                        
+    X = np.vstack((car_features, notcar_features)).astype(np.float64)
     # Fit a per-column scaler
     X_scaler = StandardScaler().fit(X)
     # Apply the scaler to X
@@ -129,7 +158,7 @@ def runme_p(index, imgs, params):
         'pixels per cell and', cell_per_block,'cells per block')
     print('Feature vector length:', len(X_train[0]))
 
-    # Use a linear SVC 
+    # Use a linear SVC
     svc = LinearSVC()
     # Check the training time for the SVC
     t=time.time()
@@ -151,27 +180,29 @@ def runme_p(index, imgs, params):
     # Uncomment the following line if you extracted training
     # data from .png images (scaled 0 to 1 by mpimg) and the
     # image you are searching is a .jpg (scaled 0 to 255)
-    #image = image.astype(np.float32)/255
+    if image_type == 'png':
+        image = image.astype(np.float32)/255
 
     # multi box search
     min_fraction = 6
-    max_fraction = 6
+    max_fraction = 10
+    step_fraction = 2
     aspect_ratio = 1.0
     hot_windows = []
     start_scan = int(imy/2)
-    for f in range(min_fraction, max_fraction+1):
+    for f in range(min_fraction, max_fraction+1, step_fraction):
         y_start_stop = [start_scan, min(start_scan + (f - 1) * int(imy/f), imy)] # Min and max in y to search in slide_window()
         xy_window = (int(imy/f), int(imy/f*aspect_ratio))
-        windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop, 
+        windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop,
                     xy_window=xy_window, xy_overlap=(0.5, 0.5))
         print (f, len(windows))
 
-        new_hot_windows = ro.search_windows(image, windows, svc, X_scaler, image_shape, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                        hist_feat=hist_feat, hog_feat=hog_feat)                       
+        new_hot_windows = ro.search_windows(image, windows, svc, X_scaler, image_shape, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
+                        hist_feat=hist_feat, hog_feat=hog_feat)
         print (f, y_start_stop, xy_window, len(new_hot_windows)) #, new_hot_windows)
         if len(new_hot_windows) > 0:
             hot_windows = hot_windows + new_hot_windows
@@ -203,23 +234,23 @@ def runme():
     hog_feat = True # HOG features on or off
     y_start_stop = [None, None] # Min and max in y to search in slide_window()
 
-    cars, notcars, image_shape = read_images()
+    cars, notcars, image_type, image_shape = read_images()
     #cars, notcars = sample(cars, notcars)
 
-    car_features = ro.extract_features(cars, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
+    car_features = ro.extract_features(cars, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
-    notcar_features = ro.extract_features(notcars, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
+    notcar_features = ro.extract_features(notcars, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
 
-    X = np.vstack((car_features, notcar_features)).astype(np.float64)                        
+    X = np.vstack((car_features, notcar_features)).astype(np.float64)
     # Fit a per-column scaler
     X_scaler = StandardScaler().fit(X)
     # Apply the scaler to X
@@ -237,7 +268,7 @@ def runme():
         'pixels per cell and', cell_per_block,'cells per block')
     print('Feature vector length:', len(X_train[0]))
 
-    # Use a linear SVC 
+    # Use a linear SVC
     svc = LinearSVC()
     # Check the training time for the SVC
     t=time.time()
@@ -269,16 +300,16 @@ def runme():
     for f in range(min_fraction, max_fraction+1):
         y_start_stop = [start_scan, min(start_scan + (f - 1) * int(imy/f), imy)] # Min and max in y to search in slide_window()
         xy_window = (int(imy/f), int(imy/f*aspect_ratio))
-        windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop, 
+        windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop,
                     xy_window=xy_window, xy_overlap=(0.5, 0.5))
         print (f, len(windows))
 
-        new_hot_windows = ro.search_windows(image, windows, svc, X_scaler, image_shape, color_space=color_space, 
-                        spatial_size=spatial_size, hist_bins=hist_bins, 
-                        orient=orient, pix_per_cell=pix_per_cell, 
-                        cell_per_block=cell_per_block, 
-                        hog_channel=hog_channel, spatial_feat=spatial_feat, 
-                        hist_feat=hist_feat, hog_feat=hog_feat)                       
+        new_hot_windows = ro.search_windows(image, windows, svc, X_scaler, image_shape, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
+                        hist_feat=hist_feat, hog_feat=hog_feat)
         print (f, y_start_stop, xy_window, len(new_hot_windows)) #, new_hot_windows)
         if len(new_hot_windows) > 0:
             hot_windows = hot_windows + new_hot_windows
@@ -293,4 +324,4 @@ def runme():
     fig1.savefig('tessstttyyy.jpg', dpi=100)
 
 if __name__=='__main__':
-    param_search()
+    param_search('all')
