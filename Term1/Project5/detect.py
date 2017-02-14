@@ -102,7 +102,12 @@ def param_search(dataset):
         print (param_print_list)
 
     for i, params in enumerate(list(ParameterGrid(param_grid))):
-        acc = runme_p(i, imgs, params)
+        cfeat, ncfeat = runme_p(imgs, params)
+        features = (cfeat, ncfeat)
+        clf, scaler, acc = create_model(features)
+        imtype, imshape = imgs[2:]
+        plot_bounding_box(clf, scaler, params, i, imtype, imshape)
+
         print ('________________%d________________________' %i)
         for key, value in params.items():
             if key in param_print_list:
@@ -110,7 +115,7 @@ def param_search(dataset):
         print ('Accuracy = ', acc)
         print ('__________________________________________')
 
-def runme_p(index, imgs, params):
+def runme_p(imgs, params):
 
     # get image info
     cars, notcars, image_type, image_shape = imgs
@@ -140,7 +145,13 @@ def runme_p(index, imgs, params):
                         hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
 
+    return (car_features, notcar_features)
+
+
+def create_model(features):
+    car_features, notcar_features = features
     X = np.vstack((car_features, notcar_features)).astype(np.float64)
+
     # Fit a per-column scaler
     X_scaler = StandardScaler().fit(X)
     # Apply the scaler to X
@@ -149,14 +160,15 @@ def runme_p(index, imgs, params):
     # Define the labels vector
     y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
 
+
     # Split up data into randomized training and test sets
     rand_state = np.random.randint(0, 100)
     X_train, X_test, y_train, y_test = train_test_split(
         scaled_X, y, test_size=0.2, random_state=rand_state)
 
-    print('Using:',orient,'orientations',pix_per_cell,
-        'pixels per cell and', cell_per_block,'cells per block')
-    print('Feature vector length:', len(X_train[0]))
+    #print('Using:',orient,'orientations',pix_per_cell,
+    #    'pixels per cell and', cell_per_block,'cells per block')
+    #print('Feature vector length:', len(X_train[0]))
 
     # Use a linear SVC
     svc = LinearSVC()
@@ -173,6 +185,15 @@ def runme_p(index, imgs, params):
     # Check the prediction time for a single sample
     t=time.time()
 
+    return (svc, X_scaler, accuracy)
+
+def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
+    '''
+    given a new image, plot a bounding box
+    around all the cars detected by the
+    classification algorithm.
+    '''
+
     image = mpimg.imread('bbox-example-image.jpg')
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
@@ -182,6 +203,18 @@ def runme_p(index, imgs, params):
     # image you are searching is a .jpg (scaled 0 to 255)
     if image_type == 'png':
         image = image.astype(np.float32)/255
+
+    # extract parameters from dictionary
+    color_space = params['color_space']
+    spatial_size = params['spatial_size']
+    hist_bins = params['hist_bins']
+    orient = params['orient']
+    pix_per_cell = params['pix_per_cell']
+    cell_per_block = params['cell_per_block']
+    hog_channel = params['hog_channel']
+    spatial_feat = params['spatial_feat']
+    hist_feat = params['hist_feat']
+    hog_feat = params['hog_feat']
 
     # multi box search
     min_fraction = 6
@@ -197,7 +230,7 @@ def runme_p(index, imgs, params):
                     xy_window=xy_window, xy_overlap=(0.5, 0.5))
         print (f, len(windows))
 
-        new_hot_windows = ro.search_windows(image, windows, svc, X_scaler, image_shape, color_space=color_space,
+        new_hot_windows = ro.search_windows(image, windows, clf, scaler, image_shape, color_space=color_space,
                         spatial_size=spatial_size, hist_bins=hist_bins,
                         orient=orient, pix_per_cell=pix_per_cell,
                         cell_per_block=cell_per_block,
@@ -216,9 +249,8 @@ def runme_p(index, imgs, params):
     plt.imshow(window_img)
     fig1 = plt.gcf()
     plt.draw()
-    fig1.savefig('fig%d.jpg' %index, dpi=100)
+    fig1.savefig('new_fig%d.jpg' %index, dpi=100)
 
-    return accuracy
 
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
