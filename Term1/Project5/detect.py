@@ -8,6 +8,7 @@ from sklearn.svm import LinearSVC
 from sklearn.model_selection import ParameterGrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
+from scipy.ndimage.measurements import label
 
 def read_images(dataset):
     # Read in cars and notcars
@@ -195,6 +196,7 @@ def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
     '''
 
     image = mpimg.imread('bbox-example-image.jpg')
+    image = mpimg.imread('test/frame300.jpg')
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
 
@@ -242,7 +244,6 @@ def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
 
     print ('size of hot_windows before plotting: ', len(hot_windows))
     window_img = ro.draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=3)
-
     '''
     plt.show()
     '''
@@ -251,6 +252,25 @@ def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
     plt.draw()
     fig1.savefig('new_fig%d.jpg' %index, dpi=100)
 
+
+    heatmap = np.zeros([draw_image.shape[0], draw_image.shape[1]])
+    heatmap = ro.add_heat(heatmap, hot_windows)
+    plt.figure()
+    plt.imshow(heatmap, cmap='gray')
+
+
+    heatmap = ro.apply_threshold(heatmap, 2)
+    labels = label(heatmap)
+    print(labels[1], 'cars found')
+    plt.figure()
+    plt.imshow(labels[0], cmap='gray')
+
+    draw_img = ro.draw_labeled_bboxes(np.copy(draw_image), labels)
+    # Display the image
+    plt.figure()
+    plt.imshow(draw_img)
+
+    plt.show()
 
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
