@@ -9,6 +9,9 @@ from sklearn.model_selection import ParameterGrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from scipy.ndimage.measurements import label
+from moviepy.editor import VideoFileClip
+import _pickle as pickle
+import argparse
 
 def read_images(dataset):
     # Read in cars and notcars
@@ -228,16 +231,27 @@ def create_model(features):
 
     return (svc, X_scaler, accuracy)
 
-def plot_bounding_box(image_file, clf, scaler, params):
+def plot_bounding_box(image, clf, scaler, params):
     '''
     given a new image, plot a bounding box
     around all the cars detected by the
     classification algorithm.
     '''
-    image = mpimg.imread(image_file)
+    if type(image) is str:
+        image_type = image.split('.')[-1]
+        image = mpimg.imread(image)
+    elif type(image) is np.ndarray:
+        if image.max() > 1:
+            image_type = 'jpg'
+        else:
+            image_type = 'png'
+    else:
+        print ("input not recognized")
+        return None
+
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
-    image_type = image_file.split('.')[-1]
+
 
     if (image_type=='jpeg' or image_type=='jpg') and params['training_image_type']=='png':
         image = image.astype(np.float32)/255
@@ -386,13 +400,23 @@ def get_still_from_video(files_to_glob):
     for file in files:
         yield file
 
-def process_video(files, clf, scaler, params):
+def process_bunch_of_still_images(files, clf, scaler, params):
     for filename in get_still_from_video(files):
         print ('processing file:', filename)
         fig = plot_bounding_box(filename, clf, scaler, params)
         plt.figure()
         plt.imshow(fig)
         plt.show()
+
+def process_video(video_file, clf, scaler, params):
+    video_clip = VideoFileClip(video_file)
+    for i, f, in enumerate(video_clip.iter_frames()):
+        if i > 300 and i <310:
+            print ('processing file:', i, f.shape)
+            fig = plot_bounding_box(f, clf, scaler, params)
+            plt.figure()
+            plt.imshow(fig)
+            plt.show()
 
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
@@ -497,10 +521,27 @@ def runme():
     plt.draw()
     fig1.savefig('tessstttyyy.jpg', dpi=100)
 
-if __name__=='__main__':
-    #param_search('all')
+def main():
 
-    clf, scaler, params = train_model('all')
+    parser = argparse.ArgumentParser(description='Description of your program')
+    parser.add_argument('-t', '--train', help='Train the classificatin model', action='store_true')
+    parser.add_argument('-s','--save_model', help='Train the classificatin model', action='store_true')
+    args = vars(parser.parse_args())
+
+    if args['train']:
+        print ("training new model...")
+        clf, scaler, params = train_model('all')
+    else:
+        print ("loading saved model...")
+        with open('my_svm_classifier.pkl', 'rb') as fid:
+            clf, scaler, params = pickle.load(fid)
+
+    if args['save_model']:
+        print ("saving the model")
+        # save the classifier
+        with open('my_svm_classifier.pkl', 'wb') as fid:
+            pickle.dump((clf, scaler, params), fid)
+
     '''
     new_image_file='test/frame300.jpg'
     fig = plot_bounding_box(new_image_file, clf, scaler, params)
@@ -508,5 +549,11 @@ if __name__=='__main__':
     plt.imshow(fig)
     plt.show()
     '''
-    glob_files = 'test/frame3[0-3]?.jpg'
-    process_video(glob_files, clf, scaler, params)
+
+    process_video('test/project_video.mp4', clf, scaler, params)
+
+    #glob_files = 'test/frame3[0-3]0.jpg'
+    #process_bunch_of_still_images(glob_files, clf, scaler, params)
+
+if __name__=='__main__':
+    main()
