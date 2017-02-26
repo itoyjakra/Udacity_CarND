@@ -62,7 +62,7 @@ def train_model(dataset):
 
     # read the images
     imgs = read_images(dataset)
-    training_image_shape = imgs[-1]
+    training_image_type, training_image_shape = imgs[2:]
 
     # set parameters
     params = {'color_space': 'YCrCb',
@@ -76,7 +76,8 @@ def train_model(dataset):
                   'hist_feat': False,
                   'hog_feat': True,
                   'y_start_stop': [None, None],
-                  'training_image_shape': training_image_shape
+                  'training_image_shape': training_image_shape,
+                  'training_image_type': training_image_type
                  }
     #param_print_list = []
     #for key, value in param_grid.items():
@@ -145,7 +146,7 @@ def param_search(dataset):
         features = (cfeat, ncfeat)
         clf, scaler, acc = create_model(features)
         imtype, imshape = imgs[2:]
-        plot_bounding_box(clf, scaler, params, i, imtype, imshape)
+        plot_bounding_box_old(clf, scaler, params, i, imtype, imshape)
 
         print ('________________%d________________________' %i)
         for key, value in params.items():
@@ -233,13 +234,12 @@ def plot_bounding_box(image_file, clf, scaler, params):
     around all the cars detected by the
     classification algorithm.
     '''
-
     image = mpimg.imread(image_file)
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
     image_type = image_file.split('.')[-1]
 
-    if image_type == 'png':
+    if (image_type=='jpeg' or image_type=='jpg') and params['training_image_type']=='png':
         image = image.astype(np.float32)/255
 
     # extract parameters from dictionary
@@ -280,6 +280,9 @@ def plot_bounding_box(image_file, clf, scaler, params):
             hot_windows = hot_windows + new_hot_windows
 
     window_img = ro.draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=3)
+    #plt.figure()
+    #plt.imshow(window_img)
+    #plt.show()
 
     heatmap = np.zeros([draw_image.shape[0], draw_image.shape[1]])
     heatmap = ro.add_heat(heatmap, hot_windows)
@@ -298,11 +301,12 @@ def plot_bounding_box_old(clf, scaler, params, index, image_type, image_shape):
     around all the cars detected by the
     classification algorithm.
     '''
-
+    print ('image_shape = ', image_shape)
     image = mpimg.imread('bbox-example-image.jpg')
     image = mpimg.imread('test/frame300.jpg')
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
+    print ('in old: ', image_type, image.shape)
 
     # Uncomment the following line if you extracted training
     # data from .png images (scaled 0 to 1 by mpimg) and the
@@ -363,7 +367,7 @@ def plot_bounding_box_old(clf, scaler, params, index, image_type, image_shape):
     plt.imshow(heatmap, cmap='gray')
 
 
-    heatmap = ro.apply_threshold(heatmap, 2)
+    heatmap = ro.apply_threshold(heatmap, 1)
     labels = label(heatmap)
     print(labels[1], 'cars found')
     plt.figure()
@@ -376,23 +380,20 @@ def plot_bounding_box_old(clf, scaler, params, index, image_type, image_shape):
 
     plt.show()
 
-def get_still_from_video():
-    files = glob.glob('test/frame3[0-3]?.jpg')
+def get_still_from_video(files_to_glob):
+    #files = glob.glob('test/frame3[0-3]?.jpg')
+    files = glob.glob(files_to_glob)
     for file in files:
         yield file
 
-def process_video():
-    pass
-    '''
-    input_images
-    for i in get_still_from_video():
-        im = mpimg.imread(i)
-        print (i, im.shape)
-        img_with_box = plot_bounding_box(clf, scaler, params, index, image_type, image_shape)
-    put_bb_in_image
-    output_images
-    '''
-    
+def process_video(files, clf, scaler, params):
+    for filename in get_still_from_video(files):
+        print ('processing file:', filename)
+        fig = plot_bounding_box(filename, clf, scaler, params)
+        plt.figure()
+        plt.imshow(fig)
+        plt.show()
+
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
     color_space = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
@@ -497,7 +498,15 @@ def runme():
     fig1.savefig('tessstttyyy.jpg', dpi=100)
 
 if __name__=='__main__':
-    clf, scaler, params = train_model('all')
-    new_image_file='test/frame300.jpg'
-    plot_bounding_box(new_image_file, clf, scaler, params)
     #param_search('all')
+
+    clf, scaler, params = train_model('all')
+    '''
+    new_image_file='test/frame300.jpg'
+    fig = plot_bounding_box(new_image_file, clf, scaler, params)
+    plt.figure()
+    plt.imshow(fig)
+    plt.show()
+    '''
+    glob_files = 'test/frame3[0-3]?.jpg'
+    process_video(glob_files, clf, scaler, params)
