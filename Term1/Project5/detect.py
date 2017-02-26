@@ -54,6 +54,44 @@ def sample(cars, notcars):
 
     return (cars, notcars)
 
+def train_model(dataset):
+    '''
+    train a model on the given dataset based on the
+    best parameters and return the model
+    '''
+
+    # read the images
+    imgs = read_images(dataset)
+    training_image_shape = imgs[-1]
+
+    # set parameters
+    params = {'color_space': 'YCrCb',
+                  'orient': 9,
+                  'pix_per_cell': 8,
+                  'cell_per_block': 2,
+                  'hog_channel': "ALL",
+                  'spatial_size': (32, 32),
+                  'hist_bins': 10,
+                  'spatial_feat': True,
+                  'hist_feat': False,
+                  'hog_feat': True,
+                  'y_start_stop': [None, None],
+                  'training_image_shape': training_image_shape
+                 }
+    #param_print_list = []
+    #for key, value in param_grid.items():
+    #    if len(value) > 1:
+    #        param_print_list.append(key)
+
+    cfeat, ncfeat = runme_p(imgs, params)
+    features = (cfeat, ncfeat)
+    clf, scaler, acc = create_model(features)
+
+    print ('Accuracy = ', acc)
+    print ('__________________________________________')
+
+    return (clf, scaler, params)
+
 def param_search(dataset):
 
     # read the images
@@ -139,6 +177,7 @@ def runme_p(imgs, params):
                         cell_per_block=cell_per_block,
                         hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
+
     notcar_features = ro.extract_features(notcars, color_space=color_space,
                         spatial_size=spatial_size, hist_bins=hist_bins,
                         orient=orient, pix_per_cell=pix_per_cell,
@@ -188,7 +227,72 @@ def create_model(features):
 
     return (svc, X_scaler, accuracy)
 
-def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
+def plot_bounding_box(image_file, clf, scaler, params):
+    '''
+    given a new image, plot a bounding box
+    around all the cars detected by the
+    classification algorithm.
+    '''
+
+    image = mpimg.imread(image_file)
+    draw_image = np.copy(image)
+    imy, imx = image.shape[:2]
+    image_type = image_file.split('.')[-1]
+
+    if image_type == 'png':
+        image = image.astype(np.float32)/255
+
+    # extract parameters from dictionary
+    color_space = params['color_space']
+    spatial_size = params['spatial_size']
+    hist_bins = params['hist_bins']
+    orient = params['orient']
+    pix_per_cell = params['pix_per_cell']
+    cell_per_block = params['cell_per_block']
+    hog_channel = params['hog_channel']
+    spatial_feat = params['spatial_feat']
+    hist_feat = params['hist_feat']
+    hog_feat = params['hog_feat']
+    training_image_shape = params['training_image_shape']
+
+    # multi box search
+    min_fraction = 6
+    max_fraction = 10
+    step_fraction = 2
+    aspect_ratio = 1.0
+    hot_windows = []
+    start_scan = int(imy/2)
+    for f in range(min_fraction, max_fraction+1, step_fraction):
+        y_start_stop = [start_scan, min(start_scan + (f - 1) * int(imy/f), imy)] # Min and max in y to search in slide_window()
+        xy_window = (int(imy/f), int(imy/f*aspect_ratio))
+        windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop,
+                    xy_window=xy_window, xy_overlap=(0.5, 0.5))
+        print (f, len(windows))
+
+        new_hot_windows = ro.search_windows(image, windows, clf, scaler, training_image_shape, color_space=color_space,
+                        spatial_size=spatial_size, hist_bins=hist_bins,
+                        orient=orient, pix_per_cell=pix_per_cell,
+                        cell_per_block=cell_per_block,
+                        hog_channel=hog_channel, spatial_feat=spatial_feat,
+                        hist_feat=hist_feat, hog_feat=hog_feat)
+        print (f, y_start_stop, xy_window, len(new_hot_windows)) #, new_hot_windows)
+        if len(new_hot_windows) > 0:
+            hot_windows = hot_windows + new_hot_windows
+
+    window_img = ro.draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=3)
+
+    heatmap = np.zeros([draw_image.shape[0], draw_image.shape[1]])
+    heatmap = ro.add_heat(heatmap, hot_windows)
+
+    heatmap = ro.apply_threshold(heatmap, 2)
+    labels = label(heatmap)
+    print(labels[1], 'cars found')
+
+    draw_img = ro.draw_labeled_bboxes(np.copy(draw_image), labels)
+
+    return draw_img
+
+def plot_bounding_box_old(clf, scaler, params, index, image_type, image_shape):
     '''
     given a new image, plot a bounding box
     around all the cars detected by the
@@ -272,6 +376,23 @@ def plot_bounding_box(clf, scaler, params, index, image_type, image_shape):
 
     plt.show()
 
+def get_still_from_video():
+    files = glob.glob('test/frame3[0-3]?.jpg')
+    for file in files:
+        yield file
+
+def process_video():
+    pass
+    '''
+    input_images
+    for i in get_still_from_video():
+        im = mpimg.imread(i)
+        print (i, im.shape)
+        img_with_box = plot_bounding_box(clf, scaler, params, index, image_type, image_shape)
+    put_bb_in_image
+    output_images
+    '''
+    
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
     color_space = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
@@ -376,4 +497,7 @@ def runme():
     fig1.savefig('tessstttyyy.jpg', dpi=100)
 
 if __name__=='__main__':
-    param_search('all')
+    clf, scaler, params = train_model('all')
+    new_image_file='test/frame300.jpg'
+    plot_bounding_box(new_image_file, clf, scaler, params)
+    #param_search('all')
