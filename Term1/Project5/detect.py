@@ -9,9 +9,10 @@ from sklearn.model_selection import ParameterGrid
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 from scipy.ndimage.measurements import label
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, ImageSequenceClip
 import _pickle as pickle
 import argparse
+from queue import Queue
 
 def read_images(dataset):
     # Read in cars and notcars
@@ -281,7 +282,7 @@ def plot_bounding_box(image, clf, scaler, params):
         xy_window = (int(imy/f), int(imy/f*aspect_ratio))
         windows = ro.slide_window(image, x_start_stop=[None, None], y_start_stop=y_start_stop,
                     xy_window=xy_window, xy_overlap=(0.5, 0.5))
-        print (f, len(windows))
+        #print (f, len(windows))
 
         new_hot_windows = ro.search_windows(image, windows, clf, scaler, training_image_shape, color_space=color_space,
                         spatial_size=spatial_size, hist_bins=hist_bins,
@@ -289,7 +290,7 @@ def plot_bounding_box(image, clf, scaler, params):
                         cell_per_block=cell_per_block,
                         hog_channel=hog_channel, spatial_feat=spatial_feat,
                         hist_feat=hist_feat, hog_feat=hog_feat)
-        print (f, y_start_stop, xy_window, len(new_hot_windows)) #, new_hot_windows)
+        #print (f, y_start_stop, xy_window, len(new_hot_windows)) #, new_hot_windows)
         if len(new_hot_windows) > 0:
             hot_windows = hot_windows + new_hot_windows
 
@@ -300,6 +301,8 @@ def plot_bounding_box(image, clf, scaler, params):
 
     heatmap = np.zeros([draw_image.shape[0], draw_image.shape[1]])
     heatmap = ro.add_heat(heatmap, hot_windows)
+
+    return heatmap
 
     heatmap = ro.apply_threshold(heatmap, 2)
     labels = label(heatmap)
@@ -408,15 +411,53 @@ def process_bunch_of_still_images(files, clf, scaler, params):
         plt.imshow(fig)
         plt.show()
 
+def get_frame_aggregate(frames):
+    '''
+    calculate and return an average from the frames
+    '''
+    copy_frames = Queue()    ###### change here ......
+    frames_list = []
+    while not frames.empty():
+        frame = frames.get()
+        copy_frames.put(frame)
+        frames_list.append(frame)
+    frame_agg = np.sum(np.array(frames_list), axis=0)
+    return frame_agg, copy_frames
+
 def process_video(video_file, clf, scaler, params):
+    '''
+    create bounding box for each frame in a video file
+    '''
     video_clip = VideoFileClip(video_file)
+
+    qsize = 5
+    heatmap_threshold = 3
+    old_frames = Queue()
+    new_frames = Queue()
+    image_sequence = []
+
     for i, f, in enumerate(video_clip.iter_frames()):
-        if i > 300 and i <310:
-            print ('processing file:', i, f.shape)
+        if i >= 0 and i <=1500:
+            print ('processing frame ', i)
             fig = plot_bounding_box(f, clf, scaler, params)
-            plt.figure()
-            plt.imshow(fig)
-            plt.show()
+            if old_frames.qsize() < qsize:
+                old_frames.put(fig)
+            else:
+                average_frame, old_frames = get_frame_aggregate(old_frames)
+                _ = old_frames.get()
+                old_frames.put(fig)
+
+                heatmap = ro.apply_threshold(average_frame, heatmap_threshold)
+                labels = label(heatmap)
+                print(labels[1], 'cars found')
+                draw_img = ro.draw_labeled_bboxes(np.copy(f), labels)
+                image_sequence.append(draw_img)
+
+                #plt.figure()
+                #plt.imshow(draw_img)
+                #plt.show()
+    clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
+    clip.write_videofile("drive_n_%d_t_%d.mp4" %(qsize, threshold), audio=False)
 
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
@@ -523,7 +564,7 @@ def runme():
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Description of your program')
+    parser = argparse.ArgumentParser(description='Detecting cars in a video')
     parser.add_argument('-t', '--train', help='Train the classificatin model', action='store_true')
     parser.add_argument('-s','--save_model', help='Train the classificatin model', action='store_true')
     args = vars(parser.parse_args())
@@ -542,18 +583,18 @@ def main():
         with open('my_svm_classifier.pkl', 'wb') as fid:
             pickle.dump((clf, scaler, params), fid)
 
+    process_video('test/project_video.mp4', clf, scaler, params)
+
     '''
     new_image_file='test/frame300.jpg'
     fig = plot_bounding_box(new_image_file, clf, scaler, params)
     plt.figure()
     plt.imshow(fig)
     plt.show()
-    '''
-
-    process_video('test/project_video.mp4', clf, scaler, params)
 
     #glob_files = 'test/frame3[0-3]0.jpg'
     #process_bunch_of_still_images(glob_files, clf, scaler, params)
+    '''
 
 if __name__=='__main__':
     main()
