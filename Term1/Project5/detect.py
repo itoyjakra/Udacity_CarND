@@ -34,7 +34,7 @@ def read_images(dataset):
         print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
         image_shape = mpimg.imread(cars[0]).shape[:2]
         image_type = 'png'
-    elif dataset == 'all':
+    elif dataset == 'regular':
         cars = glob.glob('vehicles/**/*.png', recursive=True)
         print ('number of cars = ', len(cars))
         notcars = glob.glob('non-vehicles/**/*.png', recursive=True)
@@ -42,6 +42,21 @@ def read_images(dataset):
         print ('image size for cars: ', mpimg.imread(cars[0]).shape)
         print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
         image_shape = mpimg.imread(cars[0]).shape[:2]
+        image_type = 'png'
+    elif dataset == 'all':
+        cars1 = glob.glob('vehicles/**/*.png', recursive=True)
+        cars2 = glob.glob('smallset/vehicles_smallset/**/*.jpeg', recursive=True)
+        cars = cars1 + cars2
+        print ('number of cars = ', len(cars))
+        notcars1 = glob.glob('non-vehicles/**/*.png', recursive=True)
+        notcars2 = glob.glob('smallset/non-vehicles_smallset/**/*.jpeg', recursive=True)
+        notcars = notcars1 + notcars2
+        print ('number of non-cars = ', len(notcars))
+        print ('image size for cars: ', mpimg.imread(cars[0]).shape)
+        print ('image size for non-cars: ', mpimg.imread(notcars[0]).shape)
+        image_shape = mpimg.imread(cars[0]).shape[:2]
+        im = mpimg.imread(cars[0])
+        print (np.min(im), np.max(im))
         image_type = 'png'
     else:
         print ('invalid data set')
@@ -253,8 +268,7 @@ def plot_bounding_box(image, clf, scaler, params):
     draw_image = np.copy(image)
     imy, imx = image.shape[:2]
 
-
-    if (image_type=='jpeg' or image_type=='jpg') and params['training_image_type']=='png':
+    if (image_type=='jpeg' or image_type=='jpg'): # and params['training_image_type']=='png':
         image = image.astype(np.float32)/255
 
     # extract parameters from dictionary
@@ -295,6 +309,7 @@ def plot_bounding_box(image, clf, scaler, params):
             hot_windows = hot_windows + new_hot_windows
 
     window_img = ro.draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=3)
+
     #plt.figure()
     #plt.imshow(window_img)
     #plt.show()
@@ -303,14 +318,6 @@ def plot_bounding_box(image, clf, scaler, params):
     heatmap = ro.add_heat(heatmap, hot_windows)
 
     return heatmap
-
-    heatmap = ro.apply_threshold(heatmap, 2)
-    labels = label(heatmap)
-    print(labels[1], 'cars found')
-
-    draw_img = ro.draw_labeled_bboxes(np.copy(draw_image), labels)
-
-    return draw_img
 
 def plot_bounding_box_old(clf, scaler, params, index, image_type, image_shape):
     '''
@@ -423,41 +430,38 @@ def get_frame_aggregate(frames):
         frames_list.append(frame)
     frame_agg = np.sum(np.array(frames_list), axis=0)
     return frame_agg, copy_frames
-
-def process_video(video_file, clf, scaler, params):
     '''
     create bounding box for each frame in a video file
     '''
     video_clip = VideoFileClip(video_file)
 
-    qsize = 5
+    qsize = 6
     heatmap_threshold = 3
     old_frames = Queue()
     new_frames = Queue()
     image_sequence = []
 
     for i, f, in enumerate(video_clip.iter_frames()):
-        if i >= 0 and i <=1500:
-            print ('processing frame ', i)
-            fig = plot_bounding_box(f, clf, scaler, params)
-            if old_frames.qsize() < qsize:
-                old_frames.put(fig)
-            else:
-                average_frame, old_frames = get_frame_aggregate(old_frames)
-                _ = old_frames.get()
-                old_frames.put(fig)
+        print ('processing frame ', i)
+        fig = plot_bounding_box(f, clf, scaler, params)
+        if old_frames.qsize() < qsize:
+            old_frames.put(fig)
+        else:
+            average_frame, old_frames = get_frame_aggregate(old_frames)
+            _ = old_frames.get()
+            old_frames.put(fig)
 
-                heatmap = ro.apply_threshold(average_frame, heatmap_threshold)
-                labels = label(heatmap)
-                print(labels[1], 'cars found')
-                draw_img = ro.draw_labeled_bboxes(np.copy(f), labels)
-                image_sequence.append(draw_img)
+            heatmap = ro.apply_threshold(average_frame, heatmap_threshold)
+            labels = label(heatmap)
+            print(labels[1], 'cars found')
+            draw_img = ro.draw_labeled_bboxes(np.copy(f), labels)
+            image_sequence.append(draw_img)
 
-                #plt.figure()
-                #plt.imshow(draw_img)
-                #plt.show()
+            #plt.figure()
+            #plt.imshow(draw_img)
+            #plt.show()
     clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
-    clip.write_videofile("drive_n_%d_t_%d.mp4" %(qsize, threshold), audio=False)
+    clip.write_videofile("drive_n_%d_t_%d.mp4" %(qsize, heatmap_threshold), audio=False)
 
 def runme():
     ### TODO: Tweak these parameters and see how the results change.
@@ -571,7 +575,7 @@ def main():
 
     if args['train']:
         print ("training new model...")
-        clf, scaler, params = train_model('all')
+        clf, scaler, params = train_model('regular')
     else:
         print ("loading saved model...")
         with open('my_svm_classifier.pkl', 'rb') as fid:
@@ -582,6 +586,8 @@ def main():
         # save the classifier
         with open('my_svm_classifier.pkl', 'wb') as fid:
             pickle.dump((clf, scaler, params), fid)
+
+    #process_bunch_of_still_images('test/frame740.jpg', clf, scaler, params)
 
     process_video('test/project_video.mp4', clf, scaler, params)
 
