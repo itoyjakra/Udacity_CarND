@@ -135,16 +135,16 @@ def param_search(dataset):
     y_start_stop = [None, None] # Min and max in y to search in slide_window()
     '''
 
-    param_grid = {'color_space': ['YCrCb'],
-                  'orient': [9],
-                  'pix_per_cell': [8],
-                  'cell_per_block': [2],
-                  'hog_channel': ["ALL"],
+    param_grid = {'color_space': ['RGB', 'HSV', 'LUV', 'HLS', 'YUV', 'YCrCb'],
+                  'orient': [9, 15],
+                  'pix_per_cell': [8, 12, 16],
+                  'cell_per_block': [2, 4, 6],
+                  'hog_channel': [1, 2, 3, "ALL"],
                   'spatial_size': [(32, 32)],
-                  'hist_bins': [10],
-                  'spatial_feat': [True],
-                  'hist_feat': [False],
-                  'hog_feat': [True],
+                  'hist_bins': [10, 20, 30],
+                  'spatial_feat': [True, False],
+                  'hist_feat': [True, False],
+                  'hog_feat': [True, False],
                   'y_start_stop': [[None, None]]
                  }
     param_print_list = []
@@ -587,11 +587,13 @@ def main():
         with open('my_svm_classifier.pkl', 'wb') as fid:
             pickle.dump((clf, scaler, params), fid)
 
-    #process_bunch_of_still_images('test/frame740.jpg', clf, scaler, params)
 
     process_video('test/project_video.mp4', clf, scaler, params)
 
     '''
+    param_search('regular')
+    process_bunch_of_still_images('test/frame740.jpg', clf, scaler, params)
+
     new_image_file='test/frame300.jpg'
     fig = plot_bounding_box(new_image_file, clf, scaler, params)
     plt.figure()
