@@ -430,6 +430,8 @@ def get_frame_aggregate(frames):
         frames_list.append(frame)
     frame_agg = np.sum(np.array(frames_list), axis=0)
     return frame_agg, copy_frames
+
+def process_video(video_file, clf, scaler, params):
     '''
     create bounding box for each frame in a video file
     '''
