@@ -247,7 +247,7 @@ def create_model(features):
 
     return (svc, X_scaler, accuracy)
 
-def plot_bounding_box(image, clf, scaler, params):
+def plot_bounding_box(image, clf, scaler, params, plot_box=False, plot_heat=False):
     '''
     given a new image, plot a bounding box
     around all the cars detected by the
@@ -310,12 +310,20 @@ def plot_bounding_box(image, clf, scaler, params):
 
     window_img = ro.draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=3)
 
-    #plt.figure()
-    #plt.imshow(window_img)
-    #plt.show()
-
     heatmap = np.zeros([draw_image.shape[0], draw_image.shape[1]])
     heatmap = ro.add_heat(heatmap, hot_windows)
+
+    if plot_box:
+        if plot_heat:
+            plt.figure()
+            plt.subplot(121)
+            plt.imshow(window_img)
+            plt.subplot(122)
+            plt.imshow(heatmap)
+            plt.show()
+        else:
+            plt.figure()
+            plt.imshow(window_img)
 
     return heatmap
 
