@@ -44,22 +44,44 @@ class Frame(object):
             self.mtx, self.dist = camera_cal
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        self.sobel = np.zeros_like(self.gray_image)
+        self.sobelx = np.zeros_like(self.gray_image)
+        self.sobely = np.zeros_like(self.gray_image)
+        self.sobelx_thresh = np.zeros_like(self.gray_image)
+        self.sobely_thresh = np.zeros_like(self.gray_image)
         self.grad_mag_thresh = np.zeros_like(self.gray_image)
         self.grad_dir_thresh = np.zeros_like(self.gray_image)
 
-    def mag_thresh(self, sobel_kernel=3, mag_thresh=(90, 255)):
+    def sobel(self, sobel_kernel=3):
+        self.sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        self.sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+
+    def abs_sobel_thresh(self, orient='x', thresh=(0, 255)):
+        """
+        Return an image after applying a threshold to either
+        x or y component of the Sobel gradient
+        """
+        if orient == 'x':
+            abs_sobel = np.absolute(self.sobelx)
+        if orient == 'y':
+            abs_sobel = np.absolute(self.sobely)
+        scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
+        binary_output = np.zeros_like(scaled_sobel)
+        binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
+
+        if orient == 'x':
+            self.sobelx_thresh = binary_output
+        if orient == 'y':
+            self.sobely_thresh = binary_output
+
+    def mag_thresh(self, sobel_kernel=3, thresh=(90, 255)):
         """
         Return an image after applying a threshold to Sobel gradient magnitude
         """
-        sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-
-        gradmag = np.sqrt(sobelx**2 + sobely**2)
+        gradmag = np.sqrt(self.sobelx**2 + self.sobely**2)
         scale_factor = np.max(gradmag)/255
         gradmag = (gradmag/scale_factor).astype(np.uint8)
         binary_output = np.zeros_like(gradmag)
-        binary_output[(gradmag >= mag_thresh[0]) & (gradmag <= mag_thresh[1])] = 1
+        binary_output[(gradmag >= thresh[0]) & (gradmag <= thresh[1])] = 1
 
         self.grad_mag_threah = binary_output
 
