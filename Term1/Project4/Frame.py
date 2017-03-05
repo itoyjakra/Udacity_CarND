@@ -34,32 +34,31 @@ def CalibrateCamera(glob_files='camera_cal/calibration*.jpg'):
 
     return mtx, dist
 
+
+
 class Frame(object):
     """docstring for Frame."""
-    def __init__(self, image, mtx, dist):
+    def __init__(self, image, camera_cal=None):
         self.image = image
-        self.mtx = mtx
-        self.dist = dist
-        self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        if camera_cal is None:
+            self.mtx, self.dist = CalibrateCamera()
+        else:
+            self.mtx, self.dist = camera_cal
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
-
-    def __init__(self, image):
-        self.image = image
-        self.mtx, self.dist = CalibrateCamera()
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
+        self.grad_mag_filtered = np.zeros_like(self.gray_image)
 
-    def shape(self):
-        return image.shape
+    def mag_thresh(self, sobel_kernel=3, mag_thresh=(90, 255)):
+        sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
 
-    def image(self):
-        return self.image
+        gradmag = np.sqrt(sobelx**2 + sobely**2)
+        scale_factor = np.max(gradmag)/255
+        gradmag = (gradmag/scale_factor).astype(np.uint8)
+        binary_output = np.zeros_like(gradmag)
+        binary_output[(gradmag >= mag_thresh[0]) & (gradmag <= mag_thresh[1])] = 1
 
-    def grayscale(self):
-        return self.gray_image
-
-    def undistorted(self):
-        return self.undrt_image
+        self.grad_mag_filtered = binary_output
 
 class Line(object):
     """docstring for Line."""
