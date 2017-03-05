@@ -34,8 +34,6 @@ def CalibrateCamera(glob_files='camera_cal/calibration*.jpg'):
 
     return mtx, dist
 
-
-
 class Frame(object):
     """docstring for Frame."""
     def __init__(self, image, camera_cal=None):
@@ -46,9 +44,14 @@ class Frame(object):
             self.mtx, self.dist = camera_cal
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        self.grad_mag_filtered = np.zeros_like(self.gray_image)
+        self.sobel = np.zeros_like(self.gray_image)
+        self.grad_mag_thresh = np.zeros_like(self.gray_image)
+        self.grad_dir_thresh = np.zeros_like(self.gray_image)
 
     def mag_thresh(self, sobel_kernel=3, mag_thresh=(90, 255)):
+        """
+        Return an image after applying a threshold to Sobel gradient magnitude
+        """
         sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
         sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
 
@@ -58,7 +61,17 @@ class Frame(object):
         binary_output = np.zeros_like(gradmag)
         binary_output[(gradmag >= mag_thresh[0]) & (gradmag <= mag_thresh[1])] = 1
 
-        self.grad_mag_filtered = binary_output
+        self.grad_mag_threah = binary_output
+
+    def dir_thresh(self, sobel_kernel=3, thresh=(0, np.pi/2)):
+        """
+        Return an image after applying a threshold to Sobel gradient direction
+        """
+        absgraddir = np.arctan2(np.absolute(self.sobely), np.absolute(self.sobelx))
+        binary_output =  np.zeros_like(absgraddir)
+        binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
+
+        self.grad_dir_thresh = binary_output
 
 class Line(object):
     """docstring for Line."""
