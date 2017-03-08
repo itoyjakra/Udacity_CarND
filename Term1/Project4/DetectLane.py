@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from Frame import *
+from Lane import *
 
 def plot_image(im, cmap=None):
     plt.figure()
@@ -53,7 +54,14 @@ def one_frame_pipeline(image_file, plotfig=False):
     ax2.imshow(warped, cmap='gray')
     plt.show()
 
+    window_width = 50
+    window_height = 80 # Break image into 9 vertical layers since image height is 720
+    margin = 100 # How much to slide left and right for searching
 
+    window_params = (window_width, window_height, margin)
+    lane = Lane(undist, warped, window_params)
+    cents = lane.find_window_centroids()
+    print (cents)
 
 def main():
     # TODO
