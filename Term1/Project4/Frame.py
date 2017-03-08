@@ -75,58 +75,52 @@ class Frame(object):
             self.mtx, self.dist = camera_cal
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
 
-
-        self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        self.sobelx = np.zeros_like(self.gray_image)
-        self.sobely = np.zeros_like(self.gray_image)
-        self.sobelx_thresh = np.zeros_like(self.gray_image)
-        self.sobely_thresh = np.zeros_like(self.gray_image)
-        self.grad_mag_thresh = np.zeros_like(self.gray_image)
-        self.grad_dir_thresh = np.zeros_like(self.gray_image)
-
     def sobel(self, sobel_kernel=3):
-        self.sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        self.sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+        gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        sobelx = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        sobely = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
 
-    def abs_sobel_thresh(self, orient='x', thresh=(0, 255)):
+        return (sobelx, sobely)
+
+    def sobel_thresh(self, sobel_kernel=3, orient='x', thresh=(0, 255)):
         """
         Return an image after applying a threshold to either
         x or y component of the Sobel gradient
         """
+        sobelx, sobely = self.sobel(sobel_kernel=sobel_kernel)
         if orient == 'x':
-            abs_sobel = np.absolute(self.sobelx)
+            abs_sobel = np.absolute(sobelx)
         if orient == 'y':
-            abs_sobel = np.absolute(self.sobely)
+            abs_sobel = np.absolute(sobely)
         scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
         binary_output = np.zeros_like(scaled_sobel)
         binary_output[(scaled_sobel >= thresh[0]) & (scaled_sobel <= thresh[1])] = 1
 
-        if orient == 'x':
-            self.sobelx_thresh = binary_output
-        if orient == 'y':
-            self.sobely_thresh = binary_output
+        return binary_output
 
     def mag_thresh(self, sobel_kernel=3, thresh=(90, 255)):
         """
         Return an image after applying a threshold to Sobel gradient magnitude
         """
-        gradmag = np.sqrt(self.sobelx**2 + self.sobely**2)
+        sobelx, sobely = self.sobel(sobel_kernel=sobel_kernel)
+        gradmag = np.sqrt(sobelx**2 + sobely**2)
         scale_factor = np.max(gradmag)/255
         gradmag = (gradmag/scale_factor).astype(np.uint8)
         binary_output = np.zeros_like(gradmag)
         binary_output[(gradmag >= thresh[0]) & (gradmag <= thresh[1])] = 1
 
-        self.grad_mag_threah = binary_output
+        return binary_output
 
     def dir_thresh(self, sobel_kernel=3, thresh=(0, np.pi/2)):
         """
         Return an image after applying a threshold to Sobel gradient direction
         """
-        absgraddir = np.arctan2(np.absolute(self.sobely), np.absolute(self.sobelx))
+        sobelx, sobely = self.sobel(sobel_kernel=sobel_kernel)
+        absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
         binary_output =  np.zeros_like(absgraddir)
         binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
 
-        self.grad_dir_thresh = binary_output
+        return binary_output
 
     def grayscale(self):
         return self.grayscale
@@ -136,16 +130,6 @@ class Frame(object):
         sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
 
         return (sobelx, sobely)
-
-    def thresh_sobel_dir(img, thresh=(0, np.pi/2)):
-        sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-
-        absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
-        binary_output =  np.zeros_like(absgraddir)
-        binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
-
-        return binary_output
 
     def hls_select(self, thresh=(0, 255), channel=0):
         """
