@@ -147,33 +147,33 @@ class Frame(object):
 
         return binary_output
 
-    def hls_select(img, thresh=(0, 255), channel=0):
+    def hls_select(self, thresh=(0, 255), channel=0):
         """
         Select one channel of the HLS color scheme and return a binany image
         """
-        hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+        hls = cv2.cvtColor(self.image, cv2.COLOR_RGB2HLS)
         chan_im = hls[:,:,channel]
         binary_output = np.zeros_like(chan_im)
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
         return binary_output
 
-    def hsv_select(img, thresh=(0, 255), channel=0):
+    def hsv_select(self, thresh=(0, 255), channel=0):
         """
         Select one channel of the HSV color scheme and return a binany image
         """
-        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        hsv = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
         chan_im = hsv[:,:,channel]
         binary_output = np.zeros_like(chan_im)
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
         return binary_output
 
-    def rgb_select(img, thresh=(0, 255), channel=0):
+    def rgb_select(self, thresh=(0, 255), channel=0):
         """
         Select one channel of the RGB color scheme and return a binany image
         """
-        rgb = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        rgb = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
         chan_im = rgb[:,:,channel]
         binary_output = np.zeros_like(chan_im)
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
