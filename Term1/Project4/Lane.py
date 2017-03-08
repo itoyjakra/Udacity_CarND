@@ -15,16 +15,16 @@ class Lane(object):
         self.window_height = w_height
         self.margin = w_margin
 
-    def window_mask(width, height, img_ref, center, level):
+    def window_mask(self, center, level):
         """
         Returns a rectangular mask around a detected lane center
         """
-        y_start = int(img_ref.shape[0]-(level+1)*height)
-        y_end = int(img_ref.shape[0]-level*height)
-        x_start = max(0,int(center-width/2))
-        x_end = min(int(center+width/2),img_ref.shape[1])
+        y_start = int(self.warped_image.shape[0]-(level+1)*self.window_height)
+        y_end = int(self.warped_image.shape[0]-level*self.window_height)
+        x_start = max(0,int(center-self.window_width/2))
+        x_end = min(int(center+self.window_width/2),self.warped_image.shape[1])
 
-        output = np.zeros_like(img_ref)
+        output = np.zeros_like(self.warped_image)
         output[y_start:y_end, x_start:x_end] = 1
 
         return output
@@ -122,26 +122,23 @@ class Lane(object):
         plt.show()
 
     def display_lane_centers(self):
-        #################
-        # window settings
-        window_width = 50
-        window_height = 80 # Break image into 9 vertical layers since image height is 720
-        margin = 100 # How much to slide left and right for searching
-
-        window_centroids = find_window_centroids(warped, window_width, window_height, margin)
+        """
+        plot window centroids for each lane and the mask around it
+        """
+        window_centroids = self.find_window_centroids()
 
         # If we found any window centers
         if len(window_centroids) > 0:
 
             # Points used to draw all the left and right windows
-            l_points = np.zeros_like(warped)
-            r_points = np.zeros_like(warped)
+            l_points = np.zeros_like(self.warped_image)
+            r_points = np.zeros_like(self.warped_image)
 
             # Go through each level and draw the windows
             for level in range(0,len(window_centroids)):
                 # Window_mask is a function to draw window areas
-                l_mask = window_mask(window_width,window_height,warped,window_centroids[level][0],level)
-                r_mask = window_mask(window_width,window_height,warped,window_centroids[level][1],level)
+                l_mask = self.window_mask(window_centroids[level][0],level)
+                r_mask = self.window_mask(window_centroids[level][1],level)
                 # Add graphic points from window mask here to total pixels found
                 l_points[(l_points == 255) | ((l_mask == 1) ) ] = 255
                 r_points[(r_points == 255) | ((r_mask == 1) ) ] = 255
@@ -150,16 +147,16 @@ class Lane(object):
             template = np.array(r_points+l_points,np.uint8) # add both left and right window pixels together
             zero_channel = np.zeros_like(template) # create a zero color channle
             template = np.array(cv2.merge((zero_channel,template,zero_channel)),np.uint8) # make window pixels green
-            warpage = np.array(cv2.merge((warped,warped,warped)),np.uint8) # making the original road pixels 3 color channels
+            warpage = np.array(cv2.merge((self.warped_image,self.warped_image,self.warped_image)),np.uint8) # making the original road pixels 3 color channels
             output = cv2.addWeighted(warpage, 1, template, 0.5, 0.0) # overlay the orignal road image with window results
 
         # If no window centers found, just display orginal road image
         else:
-            output = np.array(cv2.merge((warped,warped,warped)),np.uint8)
+            output = np.array(cv2.merge((self.warped_image,self.warped_image,self.warped_image)),np.uint8)
 
         # Display the final results
 
-        y = np.arange(len(window_centroids), 0, -1)*window_height - window_height/2
+        y = np.arange(len(window_centroids), 0, -1)*self.window_height - self.window_height/2
         left_points = np.array([(x, y) for (x, y) in zip(np.array(window_centroids)[:,0], y)])
         right_points = np.array([(x, y) for (x, y) in zip(np.array(window_centroids)[:,1], y)])
 
@@ -169,6 +166,3 @@ class Lane(object):
         plt.plot (right_points[:,0], right_points[:,1], 'bo')
         plt.title('window fitting results')
         plt.show()
-        print (window_centroids)
-        print (l_points.shape)
-        ##################

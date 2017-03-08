@@ -60,8 +60,9 @@ def one_frame_pipeline(image_file, plotfig=False):
 
     window_params = (window_width, window_height, margin)
     lane = Lane(undist, warped, window_params)
-    cents = lane.find_window_centroids()
-    print (cents)
+    lane.display_lane_centers()
+    #cents = lane.find_window_centroids()
+    #print (cents)
 
 def main():
     # TODO
