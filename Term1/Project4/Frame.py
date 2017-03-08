@@ -76,6 +76,9 @@ class Frame(object):
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
 
     def sobel(self, sobel_kernel=3):
+        """
+        Calculates the sobel gradients
+        """
         gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         sobelx = cv2.Sobel(gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
         sobely = cv2.Sobel(gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
@@ -124,12 +127,6 @@ class Frame(object):
 
     def grayscale(self):
         return self.grayscale
-
-    def sobel_transform(self, sobel_kernel=3):
-        sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-        sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-
-        return (sobelx, sobely)
 
     def hls_select(self, thresh=(0, 255), channel=0):
         """
