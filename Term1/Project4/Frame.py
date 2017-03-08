@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 from pprint import pprint as pp
 import glob
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 
 def CalibrateCamera(glob_files='camera_cal/calibration*.jpg'):
     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
@@ -33,6 +35,35 @@ def CalibrateCamera(glob_files='camera_cal/calibration*.jpg'):
     assert ret
 
     return mtx, dist
+
+def PerspectiveTransform(plotfig=False):
+    """
+    Create and return the matrix M for perspective
+    transformation of an image
+    """
+    mtx, dist = CalibrateCamera()
+    img = mpimg.imread("test_images/straight_lines1.jpg")
+
+    undist = cv2.undistort(img, mtx, dist, None, mtx)
+    gray = cv2.cvtColor(undist, cv2.COLOR_BGR2GRAY)
+    offset = 100
+    img_size = (gray.shape[1], gray.shape[0])
+    src = np.float32([(275, 680),  (600, 447), (682, 447), (1040, 680)])
+    src = np.float32([(220, 720),  (600, 447), (682, 447), (1110, 720)])
+    dst = np.float32([[offset, offset], [img_size[0]-offset, offset], [img_size[0]-offset, img_size[1]-offset], [offset, img_size[1]-offset]])
+    dst = np.float32([[350, img_size[1]], [350, 0], [980, 0], [980, img_size[1]]])
+    M = cv2.getPerspectiveTransform(src, dst)
+    warped = cv2.warpPerspective(undist, M, img_size)
+
+    if plotfig:
+        f, (ax1, ax2) = plt.subplots(1, 2, figsize=[12, 3])
+        ax1.imshow(undist)
+        ax1.plot(src[:,0], src[:,1], '-r')
+        ax2.imshow(warped)
+        ax2.plot(dst[:,0], dst[:,1], '-r')
+        plt.show()
+
+    return M
 
 class Frame(object):
     """docstring for Frame."""
@@ -148,6 +179,7 @@ class Frame(object):
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
         return binary_output
+
 
 class Line(object):
     """docstring for Line."""
