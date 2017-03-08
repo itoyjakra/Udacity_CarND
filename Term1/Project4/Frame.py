@@ -36,13 +36,15 @@ def CalibrateCamera(glob_files='camera_cal/calibration*.jpg'):
 
 class Frame(object):
     """docstring for Frame."""
-    def __init__(self, image, camera_cal=None):
+    def __init__(self, image, camera_cal=None, sobel_kernel=5, color_scheme='GRAY'):
         self.image = image
         if camera_cal is None:
             self.mtx, self.dist = CalibrateCamera()
         else:
             self.mtx, self.dist = camera_cal
         self.undrt_image = cv2.undistort(self.image, self.mtx, self.dist, None, self.mtx)
+
+
         self.gray_image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         self.sobelx = np.zeros_like(self.gray_image)
         self.sobely = np.zeros_like(self.gray_image)
@@ -94,6 +96,58 @@ class Frame(object):
         binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
 
         self.grad_dir_thresh = binary_output
+
+    def grayscale(self):
+        return self.grayscale
+
+    def sobel_transform(self, sobel_kernel=3):
+        sobelx = cv2.Sobel(self.gray_image, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        sobely = cv2.Sobel(self.gray_image, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+
+        return (sobelx, sobely)
+
+    def thresh_sobel_dir(img, thresh=(0, np.pi/2)):
+        sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+        sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+
+        absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
+        binary_output =  np.zeros_like(absgraddir)
+        binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
+
+        return binary_output
+
+    def hls_select(img, thresh=(0, 255), channel=0):
+        """
+        Select one channel of the HLS color scheme and return a binany image
+        """
+        hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+        chan_im = hls[:,:,channel]
+        binary_output = np.zeros_like(chan_im)
+        binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
+
+        return binary_output
+
+    def hsv_select(img, thresh=(0, 255), channel=0):
+        """
+        Select one channel of the HSV color scheme and return a binany image
+        """
+        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        chan_im = hsv[:,:,channel]
+        binary_output = np.zeros_like(chan_im)
+        binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
+
+        return binary_output
+
+    def rgb_select(img, thresh=(0, 255), channel=0):
+        """
+        Select one channel of the RGB color scheme and return a binany image
+        """
+        rgb = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        chan_im = rgb[:,:,channel]
+        binary_output = np.zeros_like(chan_im)
+        binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
+
+        return binary_output
 
 class Line(object):
     """docstring for Line."""
