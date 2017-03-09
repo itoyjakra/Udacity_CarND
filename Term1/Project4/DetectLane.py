@@ -81,22 +81,24 @@ def one_frame_pipeline(image_file, params, plotfig=False):
     """
     f = mpimg.imread(image_file)
     mtx, dist, dst, src, M, Minv = params
-    #mtx, dist = CalibrateCamera()
     undist = cv2.undistort(f, mtx, dist, None, mtx)
     im = Frame(undist)
 
+    # apply color channel thresholds
     ch1 = im.hsv_select(thresh=(150, 255), channel=1)
     ch2 = im.hsv_select(thresh=(200, 255), channel=2)
     ch3 = im.rgb_select(thresh=(0, 30))
 
+    # apply Sobel gradient thresholds
     dir_binary = im.dir_thresh(sobel_kernel=15, thresh=(0.5, 1.1))
     mag_binary = im.mag_thresh(sobel_kernel=15, thresh=(20, 125))
     sobel_binary = im.sobel_thresh(sobel_kernel=15, orient='x', thresh=(200, 255))
 
+    # combine filters
     combined = np.zeros_like(dir_binary)
     combined[(mag_binary == 1) & (dir_binary == 1) | (sobel_binary == 1)] = 1
     combined = combined.astype(np.uint8)
-    ch = ((ch1 | ch2) & ch3) # | combined
+    ch = ((ch1 | ch2) & ch3) | combined
 
     if plotfig:
         fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
@@ -104,22 +106,17 @@ def one_frame_pipeline(image_file, params, plotfig=False):
         ax2.imshow(ch, cmap='gray')
         plt.show()
 
-    ##
-    ##----------------------------------------
-    #M, dst, src = PerspectiveTransform(plotfig=True)
-    #mtx, dist = CalibrateCamera()
-    #Minv = cv2.getPerspectiveTransform(dst, src)
-    undist = cv2.undistort(f, mtx, dist, None, mtx)
-    gray = cv2.cvtColor(undist, cv2.COLOR_BGR2GRAY)
-    offset = 100
-    img_size = (gray.shape[1], gray.shape[0])
-    #warped = cv2.warpPerspective(undist, M, img_size)
+    # warp image for lane detection
+    img_size = (f.shape[1], f.shape[0])
     warped = cv2.warpPerspective(ch, M, img_size)
-    fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
-    ax1.imshow(ch, cmap='gray')
-    ax2.imshow(warped, cmap='gray')
-    plt.show()
 
+    if plotfig:
+        fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
+        ax1.imshow(ch, cmap='gray')
+        ax2.imshow(warped, cmap='gray')
+        plt.show()
+
+    # scan warped image for lanes
     window_width = 50
     window_height = 80 # Break image into 9 vertical layers since image height is 720
     margin = 100 # How much to slide left and right for searching
@@ -127,7 +124,8 @@ def one_frame_pipeline(image_file, params, plotfig=False):
     window_params = (window_width, window_height, margin)
     lane = Lane(undist, warped, window_params)
     cents = lane.find_window_centroids()
-    lane.display_lane_centers(cents)
+    if plotfig:
+        lane.display_lane_centers(cents)
     lane.plot_lane(Minv, cents)
 
 def main():
@@ -138,7 +136,10 @@ def main():
     M, dst, src = PerspectiveTransform(plotfig=False)
     Minv = cv2.getPerspectiveTransform(dst, src)
     params = (mtx, dist, dst, src, M, Minv)
-    one_frame_pipeline('test_images/test6.jpg', params, plotfig=True)
+    test_files = glob.glob('test_images/*.jpg')
+    for f in test_files:
+        print ('processing ', f)
+        one_frame_pipeline(f, params, plotfig=False)
 
 if __name__ == '__main__':
     main()
