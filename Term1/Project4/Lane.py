@@ -81,7 +81,7 @@ class Lane(object):
 
         return (left_fit, right_fit)
 
-    def plot_lane(self, Minv, window_centroids=None):
+    def plot_lane(self, Minv, window_centroids=None, plotfig=False):
         """
         highlight the detected lane and overlay it
         on the original image
@@ -113,9 +113,12 @@ class Lane(object):
         # Combine the result with the original image
         result = cv2.addWeighted(self.image, 1, newwarp, 0.3, 0)
 
-        plt.figure()
-        plt.imshow(result)
-        plt.show()
+        if plotfig:
+            plt.figure()
+            plt.imshow(result)
+            plt.show()
+
+        return result
 
     def display_lane_centers(self, window_centroids=None):
         """

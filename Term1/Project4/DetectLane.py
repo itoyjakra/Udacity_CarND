@@ -6,6 +6,7 @@ import glob
 import matplotlib.image as mpimg
 from Frame import Frame
 from Lane import Lane
+from moviepy.editor import VideoFileClip, ImageSequenceClip
 
 def plot_image(im, cmap=None):
     plt.figure()
@@ -75,11 +76,18 @@ def PerspectiveTransform(plotfig=False):
 
     return (M, dst, src)
 
-def one_frame_pipeline(image_file, params, plotfig=False):
+def one_frame_pipeline(image, params, plotfig=False):
     """
     Pipeline for processing an individual image
     """
-    f = mpimg.imread(image_file)
+    if type(image) is str:
+        f = mpimg.imread(image)
+    elif type(image is np.ndarray):
+        f = np.copy(image)
+    else:
+        print ("unknown image type")
+        return None
+
     mtx, dist, dst, src, M, Minv = params
     undist = cv2.undistort(f, mtx, dist, None, mtx)
     im = Frame(undist)
@@ -126,8 +134,18 @@ def one_frame_pipeline(image_file, params, plotfig=False):
     cents = lane.find_window_centroids()
     if plotfig:
         lane.display_lane_centers(cents)
-    lane.plot_lane(Minv, cents)
+    return lane.plot_lane(Minv, cents)
 
+def video_pipeline(video_file, params):
+    video_clip = VideoFileClip(video_file)
+    image_sequence = []
+    for i, f, in enumerate(video_clip.iter_frames()):
+        print ('processing frame ', i)
+        img = one_frame_pipeline(f, params)
+        image_sequence.append(img)
+        clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
+        clip.write_videofile("lane_test.mp4", audio=False)
+        
 def main():
     # TODO
     # 1. undistort the image at the
@@ -136,6 +154,9 @@ def main():
     M, dst, src = PerspectiveTransform(plotfig=False)
     Minv = cv2.getPerspectiveTransform(dst, src)
     params = (mtx, dist, dst, src, M, Minv)
+
+    video_pipeline("project_video.mp4", params)
+    assert 3==4
     test_files = glob.glob('test_images/*.jpg')
     for f in test_files:
         print ('processing ', f)
