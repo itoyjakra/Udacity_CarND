@@ -160,10 +160,3 @@ class Frame(object):
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
         return binary_output
-
-
-class Line(object):
-    """docstring for Line."""
-    def __init__(self, arg):
-        super(Line, self).__init__()
-        self.arg = arg

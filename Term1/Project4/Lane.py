@@ -81,13 +81,17 @@ class Lane(object):
 
         return (left_fit, right_fit)
 
-    def plot_lane(self, Minv, window_centroids):
+    def plot_lane(self, Minv, window_centroids=None):
         """
         highlight the detected lane and overlay it
         on the original image
         """
+        if window_centroids==None:
+            window_centroids = self.find_window_centroids()
+
         left_fit, right_fit = self.fit_poly_to_line(window_centroids)
-        ploty = np.linspace(0, 719, num=720)
+        n = self.image.shape[0]
+        ploty = np.linspace(0, n-1, num=n)
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
@@ -97,7 +101,6 @@ class Lane(object):
         left_fit, right_fit = self.fit_poly_to_line(window_centroids)
 
         # Recast the x and y points into usable format for cv2.fillPoly()
-        ploty = np.linspace(0, 719, num=720)
         pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
         pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
         pts = np.hstack((pts_left, pts_right))
@@ -114,11 +117,12 @@ class Lane(object):
         plt.imshow(result)
         plt.show()
 
-    def display_lane_centers(self):
+    def display_lane_centers(self, window_centroids=None):
         """
         plot window centroids for each lane and the mask around it
         """
-        window_centroids = self.find_window_centroids()
+        if window_centroids==None:
+            window_centroids = self.find_window_centroids()
 
         # If we found any window centers
         if len(window_centroids) > 0:
@@ -154,7 +158,8 @@ class Lane(object):
         right_points = np.array([(x, y) for (x, y) in zip(np.array(window_centroids)[:,1], y)])
 
         left_fit, right_fit = self.fit_poly_to_line(window_centroids)
-        ploty = np.linspace(0, 719, num=720)
+        n = self.image.shape[0]
+        ploty = np.linspace(0, n-1, num=n)
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 

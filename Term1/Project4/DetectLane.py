@@ -60,16 +60,15 @@ def one_frame_pipeline(image_file, plotfig=False):
 
     window_params = (window_width, window_height, margin)
     lane = Lane(undist, warped, window_params)
-    lane.display_lane_centers()
     cents = lane.find_window_centroids()
+    lane.display_lane_centers(cents)
     lane.plot_lane(Minv, cents)
-    #print (cents)
 
 def main():
     # TODO
     # 1. undistort the image at the
     # 2. in find_window_centroids generalize the bottom quarter selection
-    one_frame_pipeline('test_images/test2.jpg', plotfig=True)
+    one_frame_pipeline('test_images/test5.jpg', plotfig=True)
 
 if __name__ == '__main__':
     main()
