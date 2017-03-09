@@ -40,9 +40,9 @@ def one_frame_pipeline(image_file, plotfig=False):
 
     ##
     ##----------------------------------------
-    M = PerspectiveTransform(plotfig=True)
-    #img = mpimg.imread("test_images/test2.jpg")
+    M, dst, src = PerspectiveTransform(plotfig=True)
     mtx, dist = CalibrateCamera()
+    Minv = cv2.getPerspectiveTransform(dst, src)
     undist = cv2.undistort(f, mtx, dist, None, mtx)
     gray = cv2.cvtColor(undist, cv2.COLOR_BGR2GRAY)
     offset = 100
@@ -61,7 +61,8 @@ def one_frame_pipeline(image_file, plotfig=False):
     window_params = (window_width, window_height, margin)
     lane = Lane(undist, warped, window_params)
     lane.display_lane_centers()
-    #cents = lane.find_window_centroids()
+    cents = lane.find_window_centroids()
+    lane.plot_lane(Minv, cents)
     #print (cents)
 
 def main():

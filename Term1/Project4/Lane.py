@@ -68,43 +68,36 @@ class Lane(object):
 
         return window_centroids
 
-    def fit_poly_to_line():
+    def fit_poly_to_line(self, window_centroids):
+        """
+        Fit polynomial to the two detected lane markings
+        """
         leftx = np.array(window_centroids)[:,0]
         rightx = np.array(window_centroids)[:,1]
-        y = np.arange(len(window_centroids), 0, -1)*window_height - window_height/2
-        ploty = np.linspace(0, 719, num=720)
+        y = np.arange(len(window_centroids), 0, -1)*self.window_height - self.window_height/2
 
         left_fit = np.polyfit(y, leftx, 2)
-        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fit = np.polyfit(y, rightx, 2)
-        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-        plt.imshow(output)
-        plt.plot (left_points[:,0], left_points[:,1], 'ro')
-        plt.plot (right_points[:,0], right_points[:,1], 'bo')
-        plt.plot (left_fitx, ploty, '-c')
-        plt.plot (right_fitx, ploty, '-m')
-        plt.title('window fitting results')
-        plt.show()
+        return (left_fit, right_fit)
 
-        ploty = np.linspace(0, 719, num=720)# to cover same y-range as image
-        # Fit a second order polynomial to pixel positions in each fake lane line
-        left_fit = np.polyfit(ploty, leftx, 2)
-        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-        right_fit = np.polyfit(ploty, rightx, 2)
-        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-    def plot_lane():
+    def plot_lane(self, Minv, window_centroids):
         """
         highlight the detected lane and overlay it
         on the original image
         """
+        left_fit, right_fit = self.fit_poly_to_line(window_centroids)
+        ploty = np.linspace(0, 719, num=720)
+        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
         # Create an image to draw the lines on
-        warp_zero = np.zeros_like(warped).astype(np.uint8)
+        warp_zero = np.zeros_like(self.warped_image).astype(np.uint8)
         color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+        left_fit, right_fit = self.fit_poly_to_line(window_centroids)
 
         # Recast the x and y points into usable format for cv2.fillPoly()
+        ploty = np.linspace(0, 719, num=720)
         pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
         pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
         pts = np.hstack((pts_left, pts_right))
@@ -113,9 +106,9 @@ class Lane(object):
         cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
 
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
-        newwarp = cv2.warpPerspective(color_warp, Minv, (img.shape[1], img.shape[0]))
+        newwarp = cv2.warpPerspective(color_warp, Minv, (self.image.shape[1], self.image.shape[0]))
         # Combine the result with the original image
-        result = cv2.addWeighted(undist, 1, newwarp, 0.3, 0)
+        result = cv2.addWeighted(self.image, 1, newwarp, 0.3, 0)
 
         plt.figure()
         plt.imshow(result)
@@ -160,9 +153,16 @@ class Lane(object):
         left_points = np.array([(x, y) for (x, y) in zip(np.array(window_centroids)[:,0], y)])
         right_points = np.array([(x, y) for (x, y) in zip(np.array(window_centroids)[:,1], y)])
 
+        left_fit, right_fit = self.fit_poly_to_line(window_centroids)
+        ploty = np.linspace(0, 719, num=720)
+        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
         plt.plot()
         plt.imshow(output)
         plt.plot (left_points[:,0], left_points[:,1], 'ro')
         plt.plot (right_points[:,0], right_points[:,1], 'bo')
+        plt.plot (left_fitx, ploty, '-c')
+        plt.plot (right_fitx, ploty, '-m')
         plt.title('window fitting results')
         plt.show()

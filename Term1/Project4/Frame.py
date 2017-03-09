@@ -63,7 +63,7 @@ def PerspectiveTransform(plotfig=False):
         ax2.plot(dst[:,0], dst[:,1], '-r')
         plt.show()
 
-    return M
+    return (M, dst, src)
 
 class Frame(object):
     """docstring for Frame."""
