@@ -68,24 +68,39 @@ class Lane(object):
 
         return window_centroids
 
-    def fit_poly_to_line(self, window_centroids):
+    def fit_poly_to_line(self, window_centroids, scale=None):
         """
         Fit polynomial to the two detected lane markings
         """
-        leftx = np.array(window_centroids)[:,0]
-        rightx = np.array(window_centroids)[:,1]
-        y = np.arange(len(window_centroids), 0, -1)*self.window_height - self.window_height/2
+        if scale is None:
+            leftx = np.array(window_centroids)[:,0]
+            rightx = np.array(window_centroids)[:,1]
+            y = np.arange(len(window_centroids), 0, -1)*self.window_height - self.window_height/2
+        else:
+            scalex, scaley = scale
+            leftx = np.array(window_centroids)[:,0] * scalex
+            rightx = np.array(window_centroids)[:,1] * scalex
+            y = np.arange(len(window_centroids), 0, -1)*self.window_height - self.window_height/2
+            y *= scaley
 
         left_fit = np.polyfit(y, leftx, 2)
         right_fit = np.polyfit(y, rightx, 2)
 
-        return (left_fit, right_fit)
+        if scale is None:
+            return (left_fit, right_fit)
+        else:
+            return (left_fit, right_fit, y)
 
-    def plot_lane(self, Minv, window_centroids=None, plotfig=False):
+    def plot_lane(self, Minv, lane_par, window_centroids=None, plotfig=False):
         """
         highlight the detected lane and overlay it
         on the original image
         """
+        roc, offset = lane_par
+        if offset < 0:
+            side = 'right'
+        else:
+            side = 'left'
         if window_centroids==None:
             window_centroids = self.find_window_centroids()
 
@@ -116,9 +131,33 @@ class Lane(object):
         if plotfig:
             plt.figure()
             plt.imshow(result)
+            plt.text(30, 50, "Radius of Curvature = %f m" % roc)
+            plt.text(30, 100, "Vehicle is %s m %s of the center" % (np.abs(offset), side))
             plt.show()
 
         return result
+
+    def radius_of_curvature(self, centroids):
+        """
+        Calculate the radius of curvature for the two lane markings
+        """
+        ym_per_pix = 30/720 # meters per pixel in y dimension
+        xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+        left_fit_cr, right_fit_cr, ploty = self.fit_poly_to_line(centroids, scale=[xm_per_pix, ym_per_pix])
+
+        y_eval = np.max(ploty)
+        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+        avg_roc = (left_curverad + right_curverad)/2
+        lx = left_fit_cr[0]*y_eval**2 + left_fit_cr[1]*y_eval + left_fit_cr[2]
+        rx = right_fit_cr[0]*y_eval**2 + right_fit_cr[1]*y_eval + right_fit_cr[2]
+        lane_center = lx + (rx - lx)/2
+        image_center = self.image.shape[1]/2*xm_per_pix
+        vehicle_offset = image_center - lane_center
+
+        return (avg_roc, vehicle_offset)
 
     def display_lane_centers(self, window_centroids=None):
         """
