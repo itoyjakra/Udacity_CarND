@@ -135,17 +135,25 @@ def one_frame_pipeline(image, params, plotfig=False):
     roc, offset = lane.radius_of_curvature(cents)
     if plotfig:
         lane.display_lane_centers(cents)
-    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents, plotfig=True)
+    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents)
 
 def video_pipeline(video_file, params):
     video_clip = VideoFileClip(video_file)
     image_sequence = []
     for i, f, in enumerate(video_clip.iter_frames()):
         print ('processing frame ', i)
-        img = one_frame_pipeline(f, params)
+        img, roc, offset = one_frame_pipeline(f, params)
+        if offset < 0:
+            side = 'right'
+        else:
+            side = 'left'
+        cv2.putText(img, "Radius of Curvature = %.1f m" % roc, (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
+        cv2.putText(img, "Vehicle is %.2f m %s of the center" % (np.abs(offset), side), (70, 170), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
         image_sequence.append(img)
         clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
         clip.write_videofile("test_images/challenge_test.mp4", audio=False)
+        if i>10:
+            break
 
 def main():
     # TODO
@@ -156,11 +164,11 @@ def main():
     Minv = cv2.getPerspectiveTransform(dst, src)
     params = (mtx, dist, dst, src, M, Minv)
 
-    one_frame_pipeline("test_images/straight_lines1.jpg", params, plotfig=False)
-    assert 5==6
-    video_pipeline("test_images/challenge_short.mp4", params)
+    video_pipeline("test_images/project_video.mp4", params)
     assert 3==4
     test_files = glob.glob('test_images/*.jpg')
+    one_frame_pipeline("test_images/straight_lines1.jpg", params, plotfig=False)
+
     for f in test_files:
         print ('processing ', f)
         one_frame_pipeline(f, params, plotfig=False)

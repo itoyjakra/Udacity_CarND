@@ -135,7 +135,7 @@ class Lane(object):
             plt.text(30, 100, "Vehicle is %s m %s of the center" % (np.abs(offset), side))
             plt.show()
 
-        return result
+        return result, roc, offset
 
     def radius_of_curvature(self, centroids):
         """
