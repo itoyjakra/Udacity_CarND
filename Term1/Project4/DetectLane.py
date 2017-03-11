@@ -6,7 +6,9 @@ import glob
 import matplotlib.image as mpimg
 from Frame import Frame
 from Lane import Lane
+from LaneSeries import LaneSeries
 from moviepy.editor import VideoFileClip, ImageSequenceClip
+import sys
 
 def plot_image(im, cmap=None):
     plt.figure()
@@ -135,43 +137,74 @@ def one_frame_pipeline(image, params, plotfig=False):
     roc, offset = lane.radius_of_curvature(cents)
     if plotfig:
         lane.display_lane_centers(cents)
-    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents)
+    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents, plotfig=False)
 
-def video_pipeline(video_file, params):
+def video_pipeline_simple(video_file, params):
     video_clip = VideoFileClip(video_file)
     image_sequence = []
     for i, f, in enumerate(video_clip.iter_frames()):
-        print ('processing frame ', i)
+        #print ('processing frame ', i)
         img, roc, offset = one_frame_pipeline(f, params)
-        if offset < 0:
-            side = 'right'
-        else:
-            side = 'left'
+        side = "right" if offset > 0 else "left"
         cv2.putText(img, "Radius of Curvature = %.1f m" % roc, (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
         cv2.putText(img, "Vehicle is %.2f m %s of the center" % (np.abs(offset), side), (70, 170), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
         image_sequence.append(img)
-        clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
-        clip.write_videofile("test_images/challenge_test.mp4", audio=False)
-        if i>10:
-            break
+        sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
+        sys.stdout.flush()
+        #if i > 50:
+        #    break
+
+    clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
+    clip.write_videofile("test_images/chal_test.mp4", audio=False)
+
+def video_pipeline(video_file, params):
+    video_clip = VideoFileClip(video_file)
+    mtx, dist, dst, src, M, Minv = params
+
+    # get info from the first frame
+    first_frame = video_clip.get_frame(t=0)
+    undist = cv2.undistort(first_frame, mtx, dist, None, mtx)
+    im = Frame(undist)
+    war = im.process(M)
+
+    lane = LaneSeries(im.image, war)
+    print (lane.left_maxval, lane.right_maxval, lane.left_pos, lane.right_pos)
+    lane.find_window_centroids()
+    print (lane.left_maxval, lane.right_maxval, lane.left_pos, lane.right_pos)
+
+
+    image_sequence = []
+    for i, f, in enumerate(video_clip.iter_frames()):
+        undist = cv2.undistort(f, mtx, dist, None, mtx)
+        im = Frame(undist)
+        war = im.process(M)
+
+        lane.add_frame(im.image, war)
+        lane.process()
+        lane.plot_lane(Minv, plotfig=False)
+        img = lane.lane_on_image
+
+        side = "right" if lane.vehicle_offset > 0 else "left"
+        cv2.putText(img, "Radius of Curvature = %.1f m" % lane.roc, (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
+        cv2.putText(img, "Vehicle is %.2f m %s of the center" % (np.abs(lane.vehicle_offset), side), (70, 170), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
+        image_sequence.append(img)
+
+        sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
+        sys.stdout.flush()
+    clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
+    clip.write_videofile("test_images/chal_test.mp4", audio=False)
 
 def main():
     # TODO
-    # 1. undistort the image at the
-    # 2. in find_window_centroids generalize the bottom quarter selection
+    # 1. in find_window_centroids generalize the bottom quarter selection
     mtx, dist = CalibrateCamera()
     M, dst, src = PerspectiveTransform(plotfig=False)
     Minv = cv2.getPerspectiveTransform(dst, src)
     params = (mtx, dist, dst, src, M, Minv)
 
-    video_pipeline("test_images/project_video.mp4", params)
-    assert 3==4
-    test_files = glob.glob('test_images/*.jpg')
-    one_frame_pipeline("test_images/straight_lines1.jpg", params, plotfig=False)
-
-    for f in test_files:
-        print ('processing ', f)
-        one_frame_pipeline(f, params, plotfig=False)
-
+    #one_frame_pipeline("test_images/chal_vid_frame_001.jpg", params, plotfig=True)
+    video_pipeline_simple("test_images/project_video.mp4", params)
+    video_pipeline("test_images/challenge_video.mp4", params)
+    
 if __name__ == '__main__':
     main()
