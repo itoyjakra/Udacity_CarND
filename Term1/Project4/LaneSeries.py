@@ -14,8 +14,10 @@ class LaneSeries(Lane):
         self.margin = w_margin
         self.left_maxval = -100
         self.right_maxval = -100
-        self.l_center = None
-        self.r_center = None
+        self.left_pos = None
+        self.right_pos = None
+        self.frame_counter = 0
+        self.intens_accep_frac = 5
 
     def find_window_centroids(self):
         """
@@ -38,7 +40,7 @@ class LaneSeries(Lane):
             self.left_pos = l_center
         if self.right_maxval < 0:
             self.right_maxval = np.max(np.convolve(window,r_sum))
-            self.r_center = r_center
+            self.right_pos = r_center
         # Add what we found for the first layer
         window_centroids.append((l_center,r_center))
         stripes.append(0)
@@ -64,8 +66,8 @@ class LaneSeries(Lane):
             ##############print (level, np.max(conv_signal[r_min_index:r_max_index]))
 
             # Add what we found for that layer
-            r_accept = np.max(conv_signal[r_min_index:r_max_index]) > self.right_maxval/10
-            l_accept = np.max(conv_signal[l_min_index:l_max_index]) > self.left_maxval/10
+            r_accept = np.max(conv_signal[r_min_index:r_max_index]) > self.right_maxval/self.intens_accep_frac
+            l_accept = np.max(conv_signal[l_min_index:l_max_index]) > self.left_maxval/self.intens_accep_frac
             if r_accept and l_accept:
                 window_centroids.append((l_center,r_center))
                 stripes.append(level)
@@ -176,7 +178,7 @@ class LaneSeries(Lane):
         plt.title('window fitting results')
         plt.show()
 
-    def plot_lane(self, Minv, lane_par, window_centroids=None, stripes=None, plotfig=False):
+    def plot_lane(self, Minv, lane_par, window_par=None, plotfig=False):
         """
         highlight the detected lane and overlay it
         on the original image
@@ -186,8 +188,10 @@ class LaneSeries(Lane):
             side = 'right'
         else:
             side = 'left'
-        if window_centroids==None:
+        if window_par==None:
             window_centroids, stripes = self.find_window_centroids()
+        else:
+            window_centroids, stripes = window_par
 
         left_fit, right_fit = self.fit_poly_to_line(window_centroids, stripes)
         n = self.image.shape[0]
@@ -221,3 +225,25 @@ class LaneSeries(Lane):
             plt.show()
 
         return result, roc, offset
+
+    def add_frame(self, image, warped):
+        """
+        Get a new image frame
+        """
+        self.image = image
+        self.frame_counter += 1
+        self.warped_image = warped
+
+    def process(self, plotfig=False):
+        cents, stripes = self.find_window_centroids()
+
+        print ("%d centroids in frame %d" %(len(cents), self.frame_counter))
+        print (cents)
+        print (stripes)
+
+        roc, offset = self.radius_of_curvature(cents, stripes)
+        if plotfig:
+            self.display_lane_centers(cents, stripes)
+
+        return ((roc, offset), (cents, stripes))
+        return self.plot_lane(Minv, (roc, offset), window_centroids=cents, stripes=stripes, plotfig=False)
