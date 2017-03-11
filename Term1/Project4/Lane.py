@@ -53,16 +53,19 @@ class Lane(object):
             # convolve the window into the vertical slice of the image
             image_layer = np.sum(self.warped_image[int(self.warped_image.shape[0]-(level+1)*self.window_height):int(self.warped_image.shape[0]-level*self.window_height),:], axis=0)
             conv_signal = np.convolve(window, image_layer)
+
             # Find the best left centroid by using past left center as a reference
             # Use window_width/2 as offset because convolution signal reference is at right side of window, not center of window
             offset = self.window_width/2
             l_min_index = int(max(l_center+offset-self.margin,0))
             l_max_index = int(min(l_center+offset+self.margin,self.warped_image.shape[1]))
             l_center = np.argmax(conv_signal[l_min_index:l_max_index])+l_min_index-offset
+
             # Find the best right centroid by using past right center as a reference
             r_min_index = int(max(r_center+offset-self.margin,0))
             r_max_index = int(min(r_center+offset+self.margin,self.warped_image.shape[1]))
             r_center = np.argmax(conv_signal[r_min_index:r_max_index])+r_min_index-offset
+
             # Add what we found for that layer
             window_centroids.append((l_center,r_center))
 
