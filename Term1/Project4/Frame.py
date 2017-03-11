@@ -9,7 +9,7 @@ class Frame(object):
     """docstring for Frame."""
     def __init__(self, image, camera_cal=None, sobel_kernel=5, color_scheme='GRAY'):
         self.image = image
-        
+
     def sobel(self, sobel_kernel=3):
         """
         Calculates the sobel gradients
@@ -95,3 +95,43 @@ class Frame(object):
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
         return binary_output
+
+    def process(self, M_perp_tran, plotfig=False):
+        """
+        Pipeline to apply a sequence of steps to process an
+        image and return a warped image ready to be consumed
+        by the Lane class
+        """
+        # apply color channel thresholds
+        ch1 = self.hsv_select(thresh=(150, 255), channel=1)
+        ch2 = self.hsv_select(thresh=(200, 255), channel=2)
+        ch3 = self.rgb_select(thresh=(0, 30))
+
+        # apply Sobel gradient thresholds
+        dir_binary = self.dir_thresh(sobel_kernel=15, thresh=(0.5, 1.1))
+        mag_binary = self.mag_thresh(sobel_kernel=15, thresh=(20, 125))
+        sobel_binary = self.sobel_thresh(sobel_kernel=15, orient='x', thresh=(200, 255))
+
+        # combine filters
+        combined = np.zeros_like(dir_binary)
+        combined[(mag_binary == 1) & (dir_binary == 1) | (sobel_binary == 1)] = 1
+        combined = combined.astype(np.uint8)
+        ch = ((ch1 | ch2) & ch3) | combined
+
+        if plotfig:
+            fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
+            ax1.imshow(self.image)
+            ax2.imshow(ch, cmap='gray')
+            plt.show()
+
+        # warp image for lane detection
+        img_size = (self.image.shape[1], self.image.shape[0])
+        warped = cv2.warpPerspective(ch, M_perp_tran, img_size)
+
+        if plotfig:
+            fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
+            ax1.imshow(ch, cmap='gray')
+            ax2.imshow(warped, cmap='gray')
+            plt.show()
+
+        return warped
