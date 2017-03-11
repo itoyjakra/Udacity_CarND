@@ -18,6 +18,7 @@ class LaneSeries(Lane):
         self.right_pos = None
         self.frame_counter = 0
         self.intens_accep_frac = 5
+        self.lane_shift_allowance = 5
 
     def find_window_centroids(self):
         """
@@ -26,6 +27,7 @@ class LaneSeries(Lane):
         window_centroids = [] # Store the (left,right) window centroid positions per level
         window = np.ones(self.window_width) # Create our window template that we will use for convolutions
         stripes = []
+        scan_farther = True
 
         # First find the two starting positions for the left and right lane by using np.sum to get the vertical image slice
         # and then np.convolve the vertical image slice with the window template
@@ -35,42 +37,59 @@ class LaneSeries(Lane):
         l_center = np.argmax(np.convolve(window,l_sum))-self.window_width/2
         r_sum = np.sum(self.warped_image[int(3*self.warped_image.shape[0]/4):,int(self.warped_image.shape[1]/2):], axis=0)
         r_center = np.argmax(np.convolve(window,r_sum))-self.window_width/2+int(self.warped_image.shape[1]/2)
+
+        # must initial values when called for the first frame
         if self.left_maxval < 0:
             self.left_maxval = np.max(np.convolve(window,l_sum))
             self.left_pos = l_center
+        else:
+            l_loc_diff = np.abs(self.left_pos - l_center)*100/self.image.shape[1]
+            if l_loc_diff < self.lane_shift_allowance:
+                self.left_pos = l_center
+            else:
+                scan_farther = False
         if self.right_maxval < 0:
             self.right_maxval = np.max(np.convolve(window,r_sum))
             self.right_pos = r_center
+        else:
+            r_loc_diff = np.abs(self.right_pos - r_center)*100/self.image.shape[1]
+            if r_loc_diff < self.lane_shift_allowance:
+                self.right_pos = r_center
+            else:
+                scan_farther = False
+
         # Add what we found for the first layer
         window_centroids.append((l_center,r_center))
         stripes.append(0)
 
-        # Go through each layer looking for max pixel locations
-        for level in range(1,(int)(self.warped_image.shape[0]/self.window_height)):
-            # convolve the window into the vertical slice of the image
-            image_layer = np.sum(self.warped_image[int(self.warped_image.shape[0]-(level+1)*self.window_height):int(self.warped_image.shape[0]-level*self.window_height),:], axis=0)
-            conv_signal = np.convolve(window, image_layer)
-            # Find the best left centroid by using past left center as a reference
-            # Use window_width/2 as offset because convolution signal reference is at right side of window, not center of window
-            offset = self.window_width/2
+        if scan_farther:
+            # Go through each layer looking for max pixel locations
+            print ("scanning all stripes")
+            for level in range(1,(int)(self.warped_image.shape[0]/self.window_height)):
+                # convolve the window into the vertical slice of the image
+                image_layer = np.sum(self.warped_image[int(self.warped_image.shape[0]-(level+1)*self.window_height):int(self.warped_image.shape[0]-level*self.window_height),:], axis=0)
+                conv_signal = np.convolve(window, image_layer)
+                # Find the best left centroid by using past left center as a reference
+                # Use window_width/2 as offset because convolution signal reference is at right side of window, not center of window
+                offset = self.window_width/2
 
-            l_min_index = int(max(l_center+offset-self.margin,0))
-            l_max_index = int(min(l_center+offset+self.margin,self.warped_image.shape[1]))
-            l_center = np.argmax(conv_signal[l_min_index:l_max_index])+l_min_index-offset
-            ############print (level, np.max(conv_signal[l_min_index:l_max_index]))
+                l_min_index = int(max(l_center+offset-self.margin,0))
+                l_max_index = int(min(l_center+offset+self.margin,self.warped_image.shape[1]))
+                l_center = np.argmax(conv_signal[l_min_index:l_max_index])+l_min_index-offset
+                ############print (level, np.max(conv_signal[l_min_index:l_max_index]))
 
-            # Find the best right centroid by using past right center as a reference
-            r_min_index = int(max(r_center+offset-self.margin,0))
-            r_max_index = int(min(r_center+offset+self.margin,self.warped_image.shape[1]))
-            r_center = np.argmax(conv_signal[r_min_index:r_max_index])+r_min_index-offset
-            ##############print (level, np.max(conv_signal[r_min_index:r_max_index]))
+                # Find the best right centroid by using past right center as a reference
+                r_min_index = int(max(r_center+offset-self.margin,0))
+                r_max_index = int(min(r_center+offset+self.margin,self.warped_image.shape[1]))
+                r_center = np.argmax(conv_signal[r_min_index:r_max_index])+r_min_index-offset
+                ##############print (level, np.max(conv_signal[r_min_index:r_max_index]))
 
-            # Add what we found for that layer
-            r_accept = np.max(conv_signal[r_min_index:r_max_index]) > self.right_maxval/self.intens_accep_frac
-            l_accept = np.max(conv_signal[l_min_index:l_max_index]) > self.left_maxval/self.intens_accep_frac
-            if r_accept and l_accept:
-                window_centroids.append((l_center,r_center))
-                stripes.append(level)
+                # Add what we found for that layer
+                r_accept = np.max(conv_signal[r_min_index:r_max_index]) > self.right_maxval/self.intens_accep_frac
+                l_accept = np.max(conv_signal[l_min_index:l_max_index]) > self.left_maxval/self.intens_accep_frac
+                if r_accept and l_accept:
+                    window_centroids.append((l_center,r_center))
+                    stripes.append(level)
 
         return window_centroids, stripes
 
@@ -235,10 +254,12 @@ class LaneSeries(Lane):
         self.warped_image = warped
 
     def process(self, plotfig=False):
+        """
+        executes a step of the lane detection pipeline
+        """
         cents, stripes = self.find_window_centroids()
 
         print ("%d centroids in frame %d" %(len(cents), self.frame_counter))
-        print (cents)
         print (stripes)
 
         roc, offset = self.radius_of_curvature(cents, stripes)
@@ -246,4 +267,3 @@ class LaneSeries(Lane):
             self.display_lane_centers(cents, stripes)
 
         return ((roc, offset), (cents, stripes))
-        return self.plot_lane(Minv, (roc, offset), window_centroids=cents, stripes=stripes, plotfig=False)
