@@ -72,10 +72,10 @@ def model_comma_ai(camera_format, crop=None):
     model.add(Convolution2D(64, (5, 5), strides=(2, 2), padding="same"))
     model.add(Flatten())
 
-    model.add(Dropout(1))
+    model.add(Dropout(0.2))
     model.add(ELU())
     model.add(Dense(512))
-    model.add(Dropout(1))
+    model.add(Dropout(0.5))
     model.add(ELU())
     model.add(Dense(1))
 
