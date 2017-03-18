@@ -8,7 +8,7 @@ from keras.layers.convolutional import Convolution2D
 from keras.layers.pooling import MaxPooling2D
 import numpy as np
 import tensorflow as tf
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 def data_gen(samples, batch_size=32):
@@ -63,13 +63,13 @@ def model_comma_ai(camera_format, crop=None):
                         input_shape=(row_cropped, col_cropped, ch),
                         output_shape=(row_cropped, col_cropped, ch)))
 
-    model.add(Convolution2D(16, 8, 8, subsample=(4, 4), border_mode="same"))
+    model.add(Convolution2D(16, (8, 8), strides=(4, 4), padding="same"))
     model.add(ELU())
 
-    model.add(Convolution2D(32, 5, 5, subsample=(2, 2), border_mode="same"))
+    model.add(Convolution2D(32, (5, 5), strides=(2, 2), padding="same"))
     model.add(ELU())
 
-    model.add(Convolution2D(64, 5, 5, subsample=(2, 2), border_mode="same"))
+    model.add(Convolution2D(64, (5, 5), strides=(2, 2), padding="same"))
     model.add(Flatten())
 
     model.add(Dropout(1))
@@ -83,13 +83,60 @@ def model_comma_ai(camera_format, crop=None):
 
     return model
 
-def nvidia_model(camera_format, crop=None):
+def model_nvidia(camera_format, crop=None):
     """
     model developed by nvidia:
     https://images.nvidia.com/content/tegra/automotive/images/2016/solutions/pdf/end-to-end-dl-using-px.pdf
     """
+    row, col, ch = camera_format
+    if crop is None:
+        crop_top = crop_bot = crop_left = crop_right = 0
+    else:
+        crop_top, crop_bot, crop_left, crop_right = crop
+    row_cropped = row - crop_top - crop_bot
+    col_cropped = col - crop_left - crop_right
 
-    pass
+    model = Sequential()
+    model.add(Cropping2D(cropping = ((crop_top, crop_bot), (crop_left, crop_right)), input_shape = (row, col, ch), data_format = "channels_last"))
+
+    model.add(Lambda(lambda x: x/127.5 - 1.,
+                        input_shape=(row_cropped, col_cropped, ch),
+                        output_shape=(row_cropped, col_cropped, ch)))
+
+    model.add(Convolution2D(24, (5, 5), strides=(2, 2), padding="valid"))
+    model.add(ELU())
+
+    model.add(Convolution2D(36, (5, 5), strides=(2, 2), padding="valid"))
+    model.add(ELU())
+
+    model.add(Convolution2D(48, (5, 5), strides=(2, 2), padding="valid"))
+    model.add(ELU())
+
+    model.add(Convolution2D(64, (3, 3), strides=(1, 1), padding="valid"))
+    model.add(ELU())
+
+    model.add(Convolution2D(64, (3, 3), strides=(1, 1), padding="valid"))
+    model.add(Flatten())
+    model.add(Dropout(1))
+    model.add(ELU())
+
+    model.add(Dense(100))
+    model.add(Dropout(1))
+    model.add(ELU())
+
+    model.add(Dense(50))
+    model.add(Dropout(1))
+    model.add(ELU())
+
+    model.add(Dense(10))
+    model.add(Dropout(1))
+    model.add(ELU())
+
+    model.add(Dense(1))
+
+    model.compile(optimizer="adam", loss="mse")
+
+    return model
 
 def train_model(model, data):
     """
@@ -100,16 +147,17 @@ def train_model(model, data):
     validation_generator = data_gen(validation_samples, batch_size=32)
 
     model.fit_generator(train_generator,
-                        samples_per_epoch=len(train_samples),
+                        steps_per_epoch=len(train_samples),
                         validation_data=validation_generator,
-                        nb_val_samples=len(validation_samples),
-                        nb_epoch=5)
+                        validation_steps=len(validation_samples),
+                        epochs=5)
 
     return model
 
 if __name__ == "__main__":
     data = get_data()
-    model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
+    model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+    #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
     model.save('comma_ai_model.h5')
     # predict_on_new_data()
