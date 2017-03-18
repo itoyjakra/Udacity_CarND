@@ -1,0 +1,23 @@
+Term1/Project5/vehicles/
+Term1/Project5/non-vehicles/
+Term1/Project5/smallset/
+Term1/Project5/test/
+Term1/Project5/save/
+Term1/Project5/object-dataset/
+junk/
+videos/
+output_images/
+test_images/
+camera_cal/
+mySimulatorData/
+Default Mac desktop Universal.app/
+Dominique Default Mac desktop Universal.app/
+Udacity_Data/
+runSim
+develop.ipynb
+.ipynb_checkpoints
+*.gz
+*.zip
+*.pyc
+*.swp
+*.pkl
