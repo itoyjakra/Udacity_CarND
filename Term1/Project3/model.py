@@ -45,18 +45,17 @@ def get_data():
 
     return samples
 
-def model_comma_ai(camera_format):
+def model_comma_ai(camera_format, crop=None):
     """
-    create a regression deep network model
+    model developed by comma.ai: https://github.com/commaai/research
     """
-    row, col, ch = camera_format # 3, 160, 320  # camera format
-    crop_top = 50
-    crop_bot = 20
-    crop_left = 0
-    crop_right = 0
+    row, col, ch = camera_format
+    if crop is None:
+        crop_top, crop_bot, crop_left, crop_right = 0
+    else:
+        crop_top, crop_bot, crop_left, crop_right = crop
     row_cropped = row - crop_top - crop_bot
     col_cropped = col - crop_left - crop_right
-
 
     model = Sequential()
     model.add(Cropping2D(cropping = ((crop_top, crop_bot), (crop_left, crop_right)), input_shape = (row, col, ch), data_format = "channels_last"))
@@ -84,6 +83,14 @@ def model_comma_ai(camera_format):
 
     return model
 
+def nvidia_model(camera_format, crop=None):
+    """
+    model developed by nvidia:
+    https://images.nvidia.com/content/tegra/automotive/images/2016/solutions/pdf/end-to-end-dl-using-px.pdf
+    """
+
+    pass
+
 def train_model(model, data):
     """
     train model on supplied data
@@ -102,7 +109,7 @@ def train_model(model, data):
 
 if __name__ == "__main__":
     data = get_data()
-    model = model_comma_ai((160, 320, 3))
+    model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
     model.save('comma_ai_model.h5')
     # predict_on_new_data()
