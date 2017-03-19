@@ -46,23 +46,42 @@ class LaneSeries(Lane):
         self.right_maxval = np.max(np.convolve(window,r_sum))
         self.ideal_lane_width = r_center - l_center
 
-    def find_window_centroids_test(self):
+    def find_window_centroids_this_frame(self):
         """
         Find the centroids at each level (horizontal slice) of the left and right lanes
         """
-        window_centroids = []
+        l_centers = []
+        r_centers = []
+        n_levels = (int)(self.warped_image.shape[0]/self.window_height)
 
-        weights = []
-        first_frame = (self.left_maxval < 0) and (self.right_maxval < 0)
+        for level in range(n_levels):
+            v_start = int(self.warped_image.shape[0] - (level+1)*self.window_height)
+            v_end = int(self.warped_image.shape[0] - level*self.window_height)
+            image_layer = np.sum(self.warped_image[v_start:v_end,:], axis=0)
+            conv_signal = np.convolve(window, image_layer)
+            offset = self.window_width/2
 
-        l_center, r_center = self.get_lane_centers()
+            scan_center_left, scan_center_right = self.window_centroids[level]
 
-        if first_frame:
-            self.set_lane_properties()
+            l_min_index = int(max(scan_center_left + offset - self.margin[level], 0))
+            l_max_index = int(min(scan_center_left + offset +self.margin[level], self.warped_image.shape[1]))
+            l_centers.append(np.argmax(conv_signal[l_min_index:l_max_index]) + l_min_index - offset)
 
-        # Add what we found for the first layer
-        window_centroids.append((l_center, r_center))
-        weights.append((self.left_maxval, self.right_maxval))
+            r_min_index = int(max(scan_center_right + offset - self.margin[level],0))
+            r_max_index = int(min(scan_center_right + offset + self.margin[level], self.warped_image.shape[1]))
+            r_centers.append(np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index-offset)
+
+        y = np.arange(n_levels)
+        left_fit = np.polyfit(y, np.array(l_centers))
+        right_fit = np.polyfit(y, np.array(r_centers))
+
+        eval_y = self.image.shape[0] - np.arange(n_levels) * (0.5 + self.window_height)
+        lx = left_fit[0]*eval_y**2 + left_fit[1]*eval_y + left_fit[2]
+        rx = right_fit[0]*eval_y**2 + right_fit[1]*eval_y + right_fit[2]
+
+        window_centroids_this_frame = np.array([(l, r) for l, r in zip(lx, rx)])
+
+        return window_centroids_this_frame
 
     def find_window_centroids(self):
         """
