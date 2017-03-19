@@ -31,6 +31,21 @@ def data_gen(samples, batch_size=32):
             y_train = np.array(angles)
             yield shuffle(X_train, y_train)
 
+def generate_training_batch(images, angles, batch_size):
+    """
+    yield a batch of data for training
+    """
+    while 1:
+        batch_images = []
+        batch_angles = []
+        for i in range(batch_size):
+            index = np.random.randint(len(angles))
+            batch_angles.append(angles[index])
+            img = cv2.imread(images[index])
+            batch_images.append(img)
+
+        yield (np.array(batch_images), np.array(batch_angles))
+
 def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv'):
     """
     collect image file names and steering angles
@@ -39,9 +54,9 @@ def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Dat
     angles = []
     with open(dir_name+'/'+log_file) as csvfile:
         for center_img, left_img, right_img, steering_angle, _, _, speed in csv.reader(csvfile):
-            center_img = dir_name + '/' + center_img
-            left_img = dir_name + '/' + left_img
-            right_img = dir_name + '/' + right_img
+            center_img = dir_name + '/' + center_img.strip()
+            left_img = dir_name + '/' + left_img.strip()
+            right_img = dir_name + '/' + right_img.strip()
             if include_center:
                 images.extend([center_img, left_img, right_img])
                 angles.extend([float(steering_angle), float(steering_angle)+steering_offset, float(steering_angle)-steering_offset])
@@ -159,21 +174,29 @@ def train_model(model, data):
     """
     train model on supplied data
     """
-    train_samples, validation_samples = train_test_split(data, test_size=0.2)
-    train_generator = data_gen(train_samples, batch_size=32)
-    validation_generator = data_gen(validation_samples, batch_size=32)
+    X, y = data
+    train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
+    #train_samples, validation_samples = train_test_split(data, test_size=0.2)
+    #train_generator = data_gen(train_samples, batch_size=32)
+    #validation_generator = data_gen(validation_samples, batch_size=32)
+    #train_generator = generate_training_batch(train_X, train_y, batch_size=32)
+    #validation_generator = generate_training_batch(val_X, val_y, batch_size=32)
+    train_generator = generate_training_batch(X, y, batch_size=32)
 
-    model.fit_generator(train_generator,
-                        steps_per_epoch=len(train_samples),
-                        validation_data=validation_generator,
-                        validation_steps=len(validation_samples),
+    model.fit_generator(train_generator, samples_per_epoch=8000, nb_epoch=2)
+    '''
+                        steps_per_epoch=len(X),
+                        #steps_per_epoch=len(train_X),
+                        #validation_data=validation_generator,
+                        #validation_steps=len(val_X),
                         epochs=2)
+    '''
 
     return model
 
 if __name__ == "__main__":
     #data = get_data()
-    X, y = get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv')
+    data = get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv')
     model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
     #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
