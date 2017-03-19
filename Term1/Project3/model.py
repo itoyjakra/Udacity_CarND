@@ -116,20 +116,19 @@ def model_nvidia(camera_format, crop=None):
     model.add(ELU())
 
     model.add(Convolution2D(64, (3, 3), strides=(1, 1), padding="valid"))
-    model.add(Flatten())
-    model.add(Dropout(1))
     model.add(ELU())
+    model.add(Flatten())
 
     model.add(Dense(100))
-    model.add(Dropout(1))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(50))
-    model.add(Dropout(1))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(10))
-    model.add(Dropout(1))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(1))
@@ -150,7 +149,7 @@ def train_model(model, data):
                         steps_per_epoch=len(train_samples),
                         validation_data=validation_generator,
                         validation_steps=len(validation_samples),
-                        epochs=5)
+                        epochs=2)
 
     return model
 
@@ -159,5 +158,5 @@ if __name__ == "__main__":
     model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
     #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
-    model.save('comma_ai_model.h5')
+    model.save('nvidia_model_03.h5')
     # predict_on_new_data()
