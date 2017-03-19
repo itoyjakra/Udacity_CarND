@@ -26,6 +26,44 @@ class LaneSeries(Lane):
         self.margin = np.linspace(100, 100, int(self.image.shape[0]/self.window_height))
         self.lane_width_tolerance = np.linspace(10, 50, int(self.image.shape[0]/self.window_height))
 
+    def get_lane_centers(self):
+        """
+        """
+        window = np.ones(self.window_width)
+        # Sum quarter bottom of image to get slice
+        l_sum = np.sum(self.warped_image[int(3*self.warped_image.shape[0]/4):,:int(self.warped_image.shape[1]/2)], axis=0)
+        l_center = np.argmax(np.convolve(window,l_sum))-self.window_width/2
+        r_sum = np.sum(self.warped_image[int(3*self.warped_image.shape[0]/4):,int(self.warped_image.shape[1]/2):], axis=0)
+        r_center = np.argmax(np.convolve(window,r_sum))-self.window_width/2+int(self.warped_image.shape[1]/2)
+
+        return (l_center, r_center)
+
+    def set_lane_properties(self):
+        """
+        """
+        window = np.ones(self.window_width)
+        self.left_maxval = np.max(np.convolve(window,l_sum))
+        self.right_maxval = np.max(np.convolve(window,r_sum))
+        self.ideal_lane_width = r_center - l_center
+
+    def find_window_centroids_test(self):
+        """
+        Find the centroids at each level (horizontal slice) of the left and right lanes
+        """
+        window_centroids = []
+
+        weights = []
+        first_frame = (self.left_maxval < 0) and (self.right_maxval < 0)
+
+        l_center, r_center = self.get_lane_centers()
+
+        if first_frame:
+            self.set_lane_properties()
+
+        # Add what we found for the first layer
+        window_centroids.append((l_center, r_center))
+        weights.append((self.left_maxval, self.right_maxval))
+
     def find_window_centroids(self):
         """
         Find the centroids at each level (horizontal slice) of the left and right lanes
@@ -58,12 +96,14 @@ class LaneSeries(Lane):
             l_loc_diff = np.abs(self.left_pos - l_center)*100/self.image.shape[1]
             if l_loc_diff < self.lane_shift_allowance:
                 self.left_pos = l_center
+                print ('left loc diff = ', l_loc_diff)
             #else:
             #    scan_farther = False
 
             r_loc_diff = np.abs(self.right_pos - r_center)*100/self.image.shape[1]
             if r_loc_diff < self.lane_shift_allowance:
                 self.right_pos = r_center
+                print ('right loc diff = ', r_loc_diff)
             #else:
             #    scan_farther = False
 
@@ -114,6 +154,13 @@ class LaneSeries(Lane):
                     weights.append((np.max(conv_signal[l_min_index:l_max_index]), np.max(conv_signal[r_min_index:r_max_index])))
                     stripes.append(level)
             else:
+                l_loc_diff = np.abs(self.window_centroids[level][0] - l_center)*100/self.image.shape[1]
+                r_loc_diff = np.abs(self.window_centroids[level][1] - r_center)*100/self.image.shape[1]
+                if l_loc_diff < self.lane_shift_allowance:
+                    self.window_centroids[level][0] = l_center
+                if r_loc_diff < self.lane_shift_allowance:
+                    self.window_centroids[level][1] = r_center
+                '''
                 lane_width = r_center - self.window_centroids[level][0]
                 if np.abs(self.ideal_lane_width - lane_width) < self.lane_width_tolerance[level]:
                     self.window_centroids[level][1] = r_center
@@ -122,6 +169,7 @@ class LaneSeries(Lane):
                 assert lane_width>0
                 if np.abs(self.ideal_lane_width - lane_width) < self.lane_width_tolerance[level]:
                     self.window_centroids[level][0] = l_center
+                '''
 
         weights = np.array(weights)
         if first_frame:
@@ -185,8 +233,18 @@ class LaneSeries(Lane):
         y_eval = np.max(ploty)
         left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
         right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-
         avg_roc = (left_curverad + right_curverad)/2
+
+        print ('frame # = %d' % self.frame_counter)
+        print ('left roc = %.2f  right roc = %.2f  avg roc = %.2f' %(left_curverad, right_curverad, avg_roc))
+        print ('left coef', left_fit_cr)
+        print ('right coef', right_fit_cr)
+        flag = False
+        if np.sum(np.abs(np.sign(left_fit_cr) - np.sign(right_fit_cr))) > 0:
+            print ('_________________________0000_______________________')
+        else:
+            print ('____________________________________________________')
+
         lx = left_fit_cr[0]*y_eval**2 + left_fit_cr[1]*y_eval + left_fit_cr[2]
         rx = right_fit_cr[0]*y_eval**2 + right_fit_cr[1]*y_eval + right_fit_cr[2]
         lane_center = lx + (rx - lx)/2
