@@ -1,7 +1,7 @@
 import os
 import csv
 import cv2
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Flatten, Dropout
 from keras.layers import Cropping2D, Lambda, ELU
 from keras.layers.convolutional import Convolution2D
@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
+from keras.preprocessing.image import flip_axis
 
 def data_gen(samples, batch_size=32):
     num_samples = len(samples)
@@ -35,13 +36,18 @@ def generate_training_batch(images, angles, batch_size):
     """
     yield a batch of data for training
     """
+    print ("number of training samples  = ", len(images))
     while 1:
         batch_images = []
         batch_angles = []
         for i in range(batch_size):
             index = np.random.randint(len(angles))
-            batch_angles.append(angles[index])
             img = cv2.imread(images[index])
+            angle = angles[index]
+            if np.random.randint(2) == 1:
+                img = flip_axis(img, 1)
+                angle = -angle
+            batch_angles.append(angle)
             batch_images.append(img)
 
         yield (np.array(batch_images), np.array(batch_angles))
@@ -183,7 +189,7 @@ def train_model(model, data):
     #validation_generator = generate_training_batch(val_X, val_y, batch_size=32)
     train_generator = generate_training_batch(X, y, batch_size=32)
 
-    model.fit_generator(train_generator, samples_per_epoch=8000, nb_epoch=2)
+    model.fit_generator(train_generator, samples_per_epoch=len(y), nb_epoch=2)
     '''
                         steps_per_epoch=len(X),
                         #steps_per_epoch=len(train_X),
@@ -197,8 +203,16 @@ def train_model(model, data):
 if __name__ == "__main__":
     #data = get_data()
     data = get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv')
-    model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+    preload_model = None
+    preload_model = 'checkpoints/nvidia_model_03.h5'
+    if preload_model is not None:
+        try:
+            model = load_model(preload_model)
+        except:
+            print ("cannot find model to load")
+    else:
+        model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
     #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
-    model.save('nvidia_model_03.h5')
+    model.save('nvidia_model_04.h5')
     # predict_on_new_data()
