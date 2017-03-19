@@ -26,17 +26,20 @@ class LaneSeries(Lane):
         self.margin = np.linspace(100, 100, int(self.image.shape[0]/self.window_height))
         self.lane_width_tolerance = np.linspace(10, 50, int(self.image.shape[0]/self.window_height))
 
-    def get_lane_centers(self):
+    def init_lane_centers(self):
         """
+        initialize lane centers based on bottom fourth of the frame
         """
         window = np.ones(self.window_width)
         # Sum quarter bottom of image to get slice
         l_sum = np.sum(self.warped_image[int(3*self.warped_image.shape[0]/4):,:int(self.warped_image.shape[1]/2)], axis=0)
         l_center = np.argmax(np.convolve(window,l_sum))-self.window_width/2
         r_sum = np.sum(self.warped_image[int(3*self.warped_image.shape[0]/4):,int(self.warped_image.shape[1]/2):], axis=0)
-        r_center = np.argmax(np.convolve(window,r_sum))-self.window_width/2+int(self.warped_image.shape[1]/2)
+        r_center = np.argmax(np.convolve(window, r_sum)) - self.window_width/2+int(self.warped_image.shape[1]/2)
+        l_maxval = np.max(np.convolve(window, l_sum))
+        r_maxval = np.max(np.convolve(window, r_sum))
 
-        return (l_center, r_center)
+        return (l_center, r_center, l_maxval, r_maxval)
 
     def set_lane_properties(self):
         """
@@ -49,6 +52,7 @@ class LaneSeries(Lane):
     def find_window_centroids_this_frame(self):
         """
         Find the centroids at each level (horizontal slice) of the left and right lanes
+        by searching areas near previous centroids
         """
         l_centers = []
         r_centers = []
@@ -82,6 +86,69 @@ class LaneSeries(Lane):
         window_centroids_this_frame = np.array([(l, r) for l, r in zip(lx, rx)])
 
         return window_centroids_this_frame
+
+    def find_window_centroids_first_frame(self):
+        """
+        Find the centroids at each level (horizontal slice) of the left and right lanes
+        for the first time
+        """
+        window_centroids = []
+        stripes = []
+        weights = []
+
+        window = np.ones(self.window_width)
+        l_center, r_center, l_maxval, r_maxval = self.init_lane_centers()
+        n_levels = (int)(self.warped_image.shape[0]/self.window_height)
+
+        window_centroids.append((l_center, r_center))
+        stripes.append(0)
+        weights.append((self.left_maxval, self.right_maxval))
+
+        for level in range(1, n_levels):
+            v_start = int(self.warped_image.shape[0] - (level+1)*self.window_height)
+            v_end = int(self.warped_image.shape[0] - level*self.window_height)
+            image_layer = np.sum(self.warped_image[v_start:v_end,:], axis=0)
+            conv_signal = np.convolve(window, image_layer)
+            offset = self.window_width/2
+
+            l_min_index = int(max(l_center+offset-self.margin[level],0))
+            l_max_index = int(min(l_center+offset+self.margin[level],self.warped_image.shape[1]))
+
+            r_min_index = int(max(r_center+offset-self.margin[level],0))
+            r_max_index = int(min(r_center+offset+self.margin[level],self.warped_image.shape[1]))
+
+            r_accept = np.max(conv_signal[r_min_index:r_max_index]) > r_maxval/self.intens_accep_frac
+            l_accept = np.max(conv_signal[l_min_index:l_max_index]) > l_maxval/self.intens_accep_frac
+
+            if r_accept and l_accept:
+                window_centroids.append((l_center,r_center))
+                weights.append((np.max(conv_signal[l_min_index:l_max_index]), np.max(conv_signal[r_min_index:r_max_index])))
+                stripes.append(level)
+
+        weights = np.array(weights)
+
+        y = [ self.image.shape[0] - (s+0.5) * self.window_height for s in stripes]
+        #print ("y = ", y)
+        #print ("cents = ", window_centroids)
+        #print ("stripes = ", stripes)
+        #print ("weights = ", weights)
+        left_fit = np.polyfit(y, np.array(window_centroids)[:,0], 2, w=weights[:,0])
+        right_fit = np.polyfit(y, np.array(window_centroids)[:,1], 2, w=weights[:,1])
+
+        eval_y = self.image.shape[0] - np.arange(int(self.image.shape[0]/self.window_height)) * (0.5 + self.window_height)
+        lx = left_fit[0]*eval_y**2 + left_fit[1]*eval_y + left_fit[2]
+        rx = right_fit[0]*eval_y**2 + right_fit[1]*eval_y + right_fit[2]
+
+        self.window_centroids = np.array([(l, r) for l, r in zip(lx, rx)])
+        #self.stripes = range(len(self.window_centroids))
+        #assert len(self.stripes) == int(self.image.shape[0]/self.window_height)
+        #print ("fitted centroids ", self.window_centroids)
+
+        sanity = self.window_centroids[:,1] - self.window_centroids[:,0]
+        assert (sanity > 0).all()
+        #self.display_lane_centers()
+        assert 1==3
+        #self.margin = np.linspace(10, 120, int(self.image.shape[0]/self.window_height))
 
     def find_window_centroids(self):
         """
@@ -378,7 +445,13 @@ class LaneSeries(Lane):
         """
         executes a step of the lane detection pipeline
         """
-        self.find_window_centroids()
+        first_frame = (self.left_maxval < 0) and (self.right_maxval < 0)
+        if first_frame:
+            print ("-----finding lane centers for the first time-----")
+            self.find_window_centroids_first_frame()
+        else:
+            self.find_window_centroids_this_frame()
+        #self.find_window_centroids()
         self.radius_of_curvature()
         if plotfig:
             self.display_lane_centers()
