@@ -14,8 +14,7 @@ from sklearn.utils import shuffle
 def data_gen(samples, batch_size=32):
     num_samples = len(samples)
     print ("number of samples  = ", num_samples)
-    while 1: # Loop forever so the generator never terminates
-        #shuffle(samples)
+    while 1:
         for offset in range(0, num_samples, batch_size):
             batch_samples = samples[offset:offset+batch_size]
 
@@ -32,6 +31,25 @@ def data_gen(samples, batch_size=32):
             y_train = np.array(angles)
             yield shuffle(X_train, y_train)
 
+def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv'):
+    """
+    collect image file names and steering angles
+    """
+    images = []
+    angles = []
+    with open(dir_name+'/'+log_file) as csvfile:
+        for center_img, left_img, right_img, steering_angle, _, _, speed in csv.reader(csvfile):
+            center_img = dir_name + '/' + center_img
+            left_img = dir_name + '/' + left_img
+            right_img = dir_name + '/' + right_img
+            if include_center:
+                images.extend([center_img, left_img, right_img])
+                angles.extend([float(steering_angle), float(steering_angle)+steering_offset, float(steering_angle)-steering_offset])
+            else:
+                images.extend([left_img, right_img])
+                angles.extend([steering_angle+steering_offset, steering_angle-steering_offset])
+
+    return (images, angles)
 
 def get_data():
     """
@@ -154,7 +172,8 @@ def train_model(model, data):
     return model
 
 if __name__ == "__main__":
-    data = get_data()
+    #data = get_data()
+    X, y = get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv')
     model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
     #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
     train_model(model, data)
