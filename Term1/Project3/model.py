@@ -11,6 +11,7 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from keras.preprocessing.image import flip_axis
+from keras.optimizers import adam
 
 def data_gen(samples, batch_size=32):
     num_samples = len(samples)
@@ -63,9 +64,10 @@ def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Dat
             center_img = dir_name + '/' + center_img.strip()
             left_img = dir_name + '/' + left_img.strip()
             right_img = dir_name + '/' + right_img.strip()
+            steering_angle = float(steering_angle)
             if include_center:
                 images.extend([center_img, left_img, right_img])
-                angles.extend([float(steering_angle), float(steering_angle)+steering_offset, float(steering_angle)-steering_offset])
+                angles.extend([steering_angle, steering_angle+steering_offset, steering_angle-steering_offset])
             else:
                 images.extend([left_img, right_img])
                 angles.extend([steering_angle+steering_offset, steering_angle-steering_offset])
@@ -172,39 +174,53 @@ def model_nvidia(camera_format, crop=None):
 
     model.add(Dense(1))
 
-    model.compile(optimizer="adam", loss="mse")
+    adam_opt = adam(lr=0.001, decay=1.0e-6)
+    model.compile(optimizer=adam_opt, loss="mse")
+    #model.compile(optimizer="adam", loss="mse")
 
     return model
 
-def train_model(model, data):
+def train_model(model, data, n_batch=32, validate=False):
     """
     train model on supplied data
     """
     X, y = data
-    train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
+    '''
+    #train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
     #train_samples, validation_samples = train_test_split(data, test_size=0.2)
     #train_generator = data_gen(train_samples, batch_size=32)
     #validation_generator = data_gen(validation_samples, batch_size=32)
     #train_generator = generate_training_batch(train_X, train_y, batch_size=32)
     #validation_generator = generate_training_batch(val_X, val_y, batch_size=32)
-    train_generator = generate_training_batch(X, y, batch_size=32)
-
-    model.fit_generator(train_generator, samples_per_epoch=len(y), nb_epoch=2)
-    '''
+    #model.fit_generator(train_generator, samples_per_epoch=len(y), nb_epoch=2)
                         steps_per_epoch=len(X),
                         #steps_per_epoch=len(train_X),
                         #validation_data=validation_generator,
                         #validation_steps=len(val_X),
                         epochs=2)
     '''
+    if validate:
+        train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
+        train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
+        validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
+        model.fit_generator(train_generator,
+                        steps_per_epoch=len(train_X),
+                        validation_data=validation_generator,
+                        validation_steps=len(val_X),
+                        epochs=1)
+    else:
+        train_generator = generate_training_batch(X, y, batch_size=32)
+        model.fit_generator(train_generator, steps_per_epoch=len(X), epochs=2)
+        #model.fit_generator(train_generator, steps_per_epoch=len(y), epochs=3)
 
     return model
 
 if __name__ == "__main__":
     #data = get_data()
-    data = get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv')
+    steering_offset = 0.25
+    data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv')
     preload_model = None
-    preload_model = 'checkpoints/nvidia_model_03.h5'
+    #preload_model = 'checkpoints/nvidia_model_03.h5'
     if preload_model is not None:
         try:
             model = load_model(preload_model)
@@ -213,6 +229,6 @@ if __name__ == "__main__":
     else:
         model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
     #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
-    train_model(model, data)
+    train_model(model, data, n_batch=32)
     model.save('nvidia_model_04.h5')
     # predict_on_new_data()
