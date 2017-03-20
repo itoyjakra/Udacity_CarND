@@ -12,7 +12,7 @@ class LaneSeries(Lane):
         self.window_height = 80
         self.left_maxval = -100
         self.right_maxval = -100
-        self.len_centroid_list = 4
+        self.len_centroid_list = 5
         self.left_failed_frames = []
         self.right_failed_frames = []
         self.fail_count_tolerance = 3
@@ -21,7 +21,7 @@ class LaneSeries(Lane):
         self.left_pos = None
         self.right_pos = None
         self.frame_counter = 0
-        self.intens_accep_frac = 20
+        self.intens_accep_frac = 10
         self.lane_shift_allowance = 50
         self.max_lane_shift_rmse = 20
 
@@ -32,7 +32,7 @@ class LaneSeries(Lane):
         self.lane_on_image = None
         self.ideal_lane_width = -100
         self.initial_margin = 100
-        self.margin = np.linspace(20, 50, int(self.image.shape[0]/self.window_height))
+        self.margin = np.linspace(20, 30, int(self.image.shape[0]/self.window_height))
         self.lane_width_tolerance = np.linspace(10, 50, int(self.image.shape[0]/self.window_height))
 
     def init_lane_centers(self):
@@ -339,7 +339,11 @@ class LaneSeries(Lane):
         avg_roc = (left_curverad + right_curverad)/2
 
         print ('frame # = %d' % self.frame_counter)
+        lc = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / (2*left_fit_cr[0])
+        rc = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / (2*right_fit_cr[0])
+
         print ('left roc = %.2f  right roc = %.2f  avg roc = %.2f' %(left_curverad, right_curverad, avg_roc))
+        print ('left roc = %.2f  right roc = %.2f' %(lc, rc))
         print ('left coef', left_fit_cr)
         print ('right coef', right_fit_cr)
         flag = False
@@ -469,12 +473,29 @@ class LaneSeries(Lane):
         r_delta = np.sqrt(np.mean((r_cents - self.window_centroids[:,1])**2))
         return (l_delta, r_delta)
 
+    def check_curvature(self, cents):
+        """
+        check if there is a sign mismatch in the two lane curvatures
+        """
+        leftx = np.array(cents)[:,0]
+        rightx = np.array(cents)[:,1]
+        y = np.arange(len(self.window_centroids), 0, -1)*self.window_height - self.window_height/2
+
+        left_fit = np.polyfit(y, leftx, 2)
+        right_fit = np.polyfit(y, rightx, 2)
+
+        if (np.sign(left_fit[0]) == np.sign(right_fit[0])):
+            return True
+        else:
+            return False
+
     def save_new_centroids(self, cents):
         """
         save the new centroids if acceptance creiteria is met
         """
         l_delta, r_delta = self.check_new_centroids(cents)
-        if l_delta < self.max_lane_shift_rmse:
+        curvature_match = self.check_curvature(cents)
+        if (l_delta < self.max_lane_shift_rmse) and (curvature_match):
             if len(self.left_centroid_list) < self.len_centroid_list:
                 self.left_centroid_list.append(cents[:,0])
             else:
@@ -495,7 +516,7 @@ class LaneSeries(Lane):
                 self.left_centroid_list.pop(0)
                 self.left_centroid_list.append(self.window_centroids[:,0])
 
-        if r_delta < self.max_lane_shift_rmse:
+        if (r_delta < self.max_lane_shift_rmse) and (curvature_match):
             if len(self.right_centroid_list) < self.len_centroid_list:
                 self.right_centroid_list.append(cents[:,1])
             else:
