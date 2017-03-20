@@ -12,7 +12,7 @@ class LaneSeries(Lane):
         self.window_height = 80
         self.left_maxval = -100
         self.right_maxval = -100
-        self.len_centroid_list = 5
+        self.len_centroid_list = 8 #4
         self.left_failed_frames = []
         self.right_failed_frames = []
         self.fail_count_tolerance = 3
@@ -24,6 +24,7 @@ class LaneSeries(Lane):
         self.intens_accep_frac = 10
         self.lane_shift_allowance = 50
         self.max_lane_shift_rmse = 20
+        self.min_roc_threshold = 3000
 
         self.window_centroids = []
         self.stripes = []
@@ -121,6 +122,13 @@ class LaneSeries(Lane):
         n_levels = (int)(self.warped_image.shape[0]/self.window_height)
         self.left_maxval = l_maxval
         self.right_maxval = r_maxval
+
+        if (len(self.window_centroids) > 0) and (np.abs(l_center - self.window_centroids[0, 0]) > self.margin[0]):
+            l_center = self.window_centroids[0, 0]
+            print ("using previous value for l_center")
+        if (len(self.window_centroids) > 0) and (np.abs(r_center - self.window_centroids[0, 1]) > self.margin[0]):
+            r_center = self.window_centroids[0, 1]
+            print ("using previous value for r_center")
 
         window_centroids.append((l_center, r_center))
         stripes.append(0)
@@ -477,6 +485,9 @@ class LaneSeries(Lane):
         """
         check if there is a sign mismatch in the two lane curvatures
         """
+        ym_per_pix = 30/720 # meters per pixel in y dimension
+        xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
         leftx = np.array(cents)[:,0]
         rightx = np.array(cents)[:,1]
         y = np.arange(len(self.window_centroids), 0, -1)*self.window_height - self.window_height/2
@@ -484,10 +495,22 @@ class LaneSeries(Lane):
         left_fit = np.polyfit(y, leftx, 2)
         right_fit = np.polyfit(y, rightx, 2)
 
+        y_eval = np.min(y)
+        left_roc1 = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+        right_roc1 = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+
+        y_eval = np.max(y)
+        left_roc2 = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+        right_roc2 = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+
         if (np.sign(left_fit[0]) == np.sign(right_fit[0])):
             return True
         else:
-            return False
+            print ("rocs: ", left_roc1, right_roc1, left_roc2, right_roc2)
+            if (left_roc2 > self.min_roc_threshold) or (right_roc2 > self.min_roc_threshold):
+                return True
+            else:
+                return False
 
     def save_new_centroids(self, cents):
         """
@@ -580,4 +603,4 @@ class LaneSeries(Lane):
         self.right_failed_frames = []
         self.left_centroid_list = []
         self.right_centroid_list = []
-        self.window_centroids = []
+        #self.window_centroids = []
