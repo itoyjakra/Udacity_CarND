@@ -16,7 +16,7 @@ class LaneSeries(Lane):
         self.right_pos = None
         self.frame_counter = 0
         self.intens_accep_frac = 20
-        self.lane_shift_allowance = 5
+        self.lane_shift_allowance = 50
         self.window_centroids = []
         self.stripes = []
         self.roc = 0
@@ -56,6 +56,7 @@ class LaneSeries(Lane):
         """
         l_centers = []
         r_centers = []
+        window = np.ones(self.window_width)
         n_levels = (int)(self.warped_image.shape[0]/self.window_height)
 
         for level in range(n_levels):
@@ -75,11 +76,11 @@ class LaneSeries(Lane):
             r_max_index = int(min(scan_center_right + offset + self.margin[level], self.warped_image.shape[1]))
             r_centers.append(np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index-offset)
 
-        y = np.arange(n_levels)
-        left_fit = np.polyfit(y, np.array(l_centers))
-        right_fit = np.polyfit(y, np.array(r_centers))
+        y = self.image.shape[0] - np.arange(n_levels) * (0.5 + self.window_height)
+        left_fit = np.polyfit(y, np.array(l_centers), 2)
+        right_fit = np.polyfit(y, np.array(r_centers), 2)
 
-        eval_y = self.image.shape[0] - np.arange(n_levels) * (0.5 + self.window_height)
+        eval_y = y
         lx = left_fit[0]*eval_y**2 + left_fit[1]*eval_y + left_fit[2]
         rx = right_fit[0]*eval_y**2 + right_fit[1]*eval_y + right_fit[2]
 
@@ -436,6 +437,23 @@ class LaneSeries(Lane):
         self.frame_counter += 1
         self.warped_image = warped
 
+    def check_new_centroids(self, cents):
+        """
+        calculates the rmse between the new lane centroids
+        and the existing lane centroids
+        """
+        l_cents = cents[:,0]
+        r_cents = cents[:,1]
+        l_delta = np.sqrt(np.mean((l_cents - self.window_centroids[:,0])**2))
+        r_delta = np.sqrt(np.mean((r_cents - self.window_centroids[:,1])**2))
+        return (l_delta, r_delta)
+
+    def save_new_centroids(self, cents):
+        """
+        save the new centroids if acceptance creiteria is met
+        """
+        l_delta, r_delta = self.check_new_centroids(cents)
+
     def process(self, plotfig=False):
         """
         executes a step of the lane detection pipeline
@@ -448,6 +466,10 @@ class LaneSeries(Lane):
         else:
             print ("---moving onto the next frame---")
             new_centroids = self.find_window_centroids_this_frame()
+            print ("new centroids: ", new_centroids)
+            #l_delta, r_delta = self.check_new_centroids(new_centroids)
+            self.save_new_centroids(new_centroids)
+
         #self.find_window_centroids()
         self.radius_of_curvature()
         if plotfig:
