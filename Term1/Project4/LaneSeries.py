@@ -12,10 +12,10 @@ class LaneSeries(Lane):
         self.window_height = 80
         self.left_maxval = -100
         self.right_maxval = -100
-        self.len_centroid_list = 5
-        self.left_fail_count = 0
-        self.right_fail_count = 0
-        self.fail_count_tolerance = 10
+        self.len_centroid_list = 4
+        self.left_failed_frames = []
+        self.right_failed_frames = []
+        self.fail_count_tolerance = 3
         self.left_centroid_list = []
         self.right_centroid_list = []
         self.left_pos = None
@@ -32,7 +32,7 @@ class LaneSeries(Lane):
         self.lane_on_image = None
         self.ideal_lane_width = -100
         self.initial_margin = 100
-        self.margin = np.linspace(70, 70, int(self.image.shape[0]/self.window_height))
+        self.margin = np.linspace(20, 50, int(self.image.shape[0]/self.window_height))
         self.lane_width_tolerance = np.linspace(10, 50, int(self.image.shape[0]/self.window_height))
 
     def init_lane_centers(self):
@@ -165,7 +165,7 @@ class LaneSeries(Lane):
 
         sanity = self.window_centroids[:,1] - self.window_centroids[:,0]
         assert (sanity > 0).all()
-        self.display_lane_centers()
+        #self.display_lane_centers()
         #self.margin = np.linspace(10, 120, int(self.image.shape[0]/self.window_height))
 
     def find_window_centroids(self):
@@ -482,7 +482,12 @@ class LaneSeries(Lane):
                 self.left_centroid_list.pop(0)
                 self.left_centroid_list.append(cents[:,0])
         else:
-            self.left_fail_count += 1
+            # make sure failure happens in consecutive frames
+            if (len(self.left_failed_frames) > 0) and ((self.frame_counter - self.left_failed_frames[-1]) == 1):
+                self.left_failed_frames.append(self.frame_counter)
+            else:
+                self.left_failed_frames = [self.frame_counter]
+
             if len(self.left_centroid_list) < self.len_centroid_list:
                 self.left_centroid_list.append(self.window_centroids[:,0])
             else:
@@ -498,7 +503,12 @@ class LaneSeries(Lane):
                 self.right_centroid_list.pop(0)
                 self.right_centroid_list.append(cents[:,1])
         else:
-            self.right_fail_count += 1
+            # make sure failure happens in consecutive frames
+            if (len(self.right_failed_frames) > 0) and ((self.frame_counter - self.right_failed_frames[-1]) == 1):
+                self.right_failed_frames.append(self.frame_counter)
+            else:
+                self.right_failed_frames = [self.frame_counter]
+
             if len(self.right_centroid_list) < self.len_centroid_list:
                 self.right_centroid_list.append(self.window_centroids[:,1])
             else:
@@ -507,7 +517,7 @@ class LaneSeries(Lane):
                 self.right_centroid_list.append(self.window_centroids[:,1])
 
         print ("left delta = %.2f, right delta = %.2f" % (l_delta, r_delta))
-        print ("left fail = %d, right fail = %d" %(self.left_fail_count, self.right_fail_count))
+        print ("left fail = %d, right fail = %d" %(len(self.left_failed_frames), len(self.right_failed_frames)))
 
         self.window_centroids[:,0] = np.mean(self.left_centroid_list, axis=0)
         self.window_centroids[:,1] = np.mean(self.right_centroid_list, axis=0)
@@ -531,7 +541,7 @@ class LaneSeries(Lane):
         if plotfig:
             self.display_lane_centers()
 
-        if (self.left_fail_count >= self.fail_count_tolerance) or (self.right_fail_count >= self.fail_count_tolerance):
+        if (len(self.left_failed_frames) >= self.fail_count_tolerance) or (len(self.right_failed_frames) >= self.fail_count_tolerance):
             return True
         else:
             return False
@@ -540,11 +550,13 @@ class LaneSeries(Lane):
         """
         recalculate lanes following detection failure
         """
+        print ("left failed frames: ", self.left_failed_frames)
+        print ("right failed frames: ", self.right_failed_frames)
         print ("resetting saved lane info ----------------------")
         self.left_maxval = -100
         self.right_maxval = -100
-        self.left_fail_count = 0
-        self.right_fail_count = 0
+        self.left_failed_frames = []
+        self.right_failed_frames = []
         self.left_centroid_list = []
         self.right_centroid_list = []
         self.window_centroids = []
