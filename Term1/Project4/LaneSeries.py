@@ -15,7 +15,7 @@ class LaneSeries(Lane):
         self.len_centroid_list = 5
         self.left_fail_count = 0
         self.right_fail_count = 0
-        self.fail_count_tolerance = 5
+        self.fail_count_tolerance = 10
         self.left_centroid_list = []
         self.right_centroid_list = []
         self.left_pos = None
@@ -23,6 +23,7 @@ class LaneSeries(Lane):
         self.frame_counter = 0
         self.intens_accep_frac = 20
         self.lane_shift_allowance = 50
+        self.max_lane_shift_rmse = 20
 
         self.window_centroids = []
         self.stripes = []
@@ -30,7 +31,8 @@ class LaneSeries(Lane):
         self.vehicle_offset = 0
         self.lane_on_image = None
         self.ideal_lane_width = -100
-        self.margin = np.linspace(100, 100, int(self.image.shape[0]/self.window_height))
+        self.initial_margin = 100
+        self.margin = np.linspace(70, 70, int(self.image.shape[0]/self.window_height))
         self.lane_width_tolerance = np.linspace(10, 50, int(self.image.shape[0]/self.window_height))
 
     def init_lane_centers(self):
@@ -76,12 +78,22 @@ class LaneSeries(Lane):
             scan_center_left, scan_center_right = self.window_centroids[level]
 
             l_min_index = int(max(scan_center_left + offset - self.margin[level], 0))
-            l_max_index = int(min(scan_center_left + offset +self.margin[level], self.warped_image.shape[1]))
-            l_centers.append(np.argmax(conv_signal[l_min_index:l_max_index]) + l_min_index - offset)
+            l_max_index = int(min(scan_center_left + offset + self.margin[level], self.warped_image.shape[1]))
+            signal = conv_signal[l_min_index:l_max_index]
+            if len(signal) > 0:
+                l_centers.append(np.argmax(signal) + l_min_index - offset)
+            else:
+                l_centers.append(self.window_centroids[level, 0])
+            #l_centers.append(np.argmax(conv_signal[l_min_index:l_max_index]) + l_min_index - offset)
 
-            r_min_index = int(max(scan_center_right + offset - self.margin[level],0))
+            r_min_index = int(max(scan_center_right + offset - self.margin[level], 0))
             r_max_index = int(min(scan_center_right + offset + self.margin[level], self.warped_image.shape[1]))
-            r_centers.append(np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index-offset)
+            signal = conv_signal[r_min_index:r_max_index]
+            if len(signal) > 0:
+                r_centers.append(np.argmax(signal) + r_min_index - offset)
+            else:
+                r_centers.append(self.window_centroids[level, 1])
+            #r_centers.append(np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index-offset)
 
         y = self.image.shape[0] - np.arange(n_levels) * (0.5 + self.window_height)
         left_fit = np.polyfit(y, np.array(l_centers), 2)
@@ -121,12 +133,12 @@ class LaneSeries(Lane):
             conv_signal = np.convolve(window, image_layer)
             offset = self.window_width/2
 
-            l_min_index = int(max(l_center+offset-self.margin[level],0))
-            l_max_index = int(min(l_center+offset+self.margin[level],self.warped_image.shape[1]))
+            l_min_index = int(max(l_center+offset-self.initial_margin,0))
+            l_max_index = int(min(l_center+offset+self.initial_margin,self.warped_image.shape[1]))
             l_center = np.argmax(conv_signal[l_min_index:l_max_index]) + l_min_index - offset
 
-            r_min_index = int(max(r_center+offset-self.margin[level],0))
-            r_max_index = int(min(r_center+offset+self.margin[level],self.warped_image.shape[1]))
+            r_min_index = int(max(r_center+offset-self.initial_margin,0))
+            r_max_index = int(min(r_center+offset+self.initial_margin,self.warped_image.shape[1]))
             r_center = np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index - offset
 
             r_accept = np.max(conv_signal[r_min_index:r_max_index]) > r_maxval/self.intens_accep_frac
@@ -462,7 +474,7 @@ class LaneSeries(Lane):
         save the new centroids if acceptance creiteria is met
         """
         l_delta, r_delta = self.check_new_centroids(cents)
-        if l_delta < self.lane_shift_allowance:
+        if l_delta < self.max_lane_shift_rmse:
             if len(self.left_centroid_list) < self.len_centroid_list:
                 self.left_centroid_list.append(cents[:,0])
             else:
@@ -471,8 +483,14 @@ class LaneSeries(Lane):
                 self.left_centroid_list.append(cents[:,0])
         else:
             self.left_fail_count += 1
+            if len(self.left_centroid_list) < self.len_centroid_list:
+                self.left_centroid_list.append(self.window_centroids[:,0])
+            else:
+                print ("replacing L")
+                self.left_centroid_list.pop(0)
+                self.left_centroid_list.append(self.window_centroids[:,0])
 
-        if r_delta < self.lane_shift_allowance:
+        if r_delta < self.max_lane_shift_rmse:
             if len(self.right_centroid_list) < self.len_centroid_list:
                 self.right_centroid_list.append(cents[:,1])
             else:
@@ -481,6 +499,15 @@ class LaneSeries(Lane):
                 self.right_centroid_list.append(cents[:,1])
         else:
             self.right_fail_count += 1
+            if len(self.right_centroid_list) < self.len_centroid_list:
+                self.right_centroid_list.append(self.window_centroids[:,1])
+            else:
+                print ("replacing L")
+                self.right_centroid_list.pop(0)
+                self.right_centroid_list.append(self.window_centroids[:,1])
+
+        print ("left delta = %.2f, right delta = %.2f" % (l_delta, r_delta))
+        print ("left fail = %d, right fail = %d" %(self.left_fail_count, self.right_fail_count))
 
         self.window_centroids[:,0] = np.mean(self.left_centroid_list, axis=0)
         self.window_centroids[:,1] = np.mean(self.right_centroid_list, axis=0)
