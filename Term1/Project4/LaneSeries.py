@@ -13,6 +13,9 @@ class LaneSeries(Lane):
         self.left_maxval = -100
         self.right_maxval = -100
         self.len_centroid_list = 5
+        self.left_fail_count = 0
+        self.right_fail_count = 0
+        self.fail_count_tolerance = 5
         self.left_centroid_list = []
         self.right_centroid_list = []
         self.left_pos = None
@@ -466,6 +469,8 @@ class LaneSeries(Lane):
                 print ("replacing L")
                 self.left_centroid_list.pop(0)
                 self.left_centroid_list.append(cents[:,0])
+        else:
+            self.left_fail_count += 1
 
         if r_delta < self.lane_shift_allowance:
             if len(self.right_centroid_list) < self.len_centroid_list:
@@ -474,6 +479,8 @@ class LaneSeries(Lane):
                 print ("replacing R")
                 self.right_centroid_list.pop(0)
                 self.right_centroid_list.append(cents[:,1])
+        else:
+            self.right_fail_count += 1
 
         self.window_centroids[:,0] = np.mean(self.left_centroid_list, axis=0)
         self.window_centroids[:,1] = np.mean(self.right_centroid_list, axis=0)
@@ -493,7 +500,24 @@ class LaneSeries(Lane):
             self.save_new_centroids(new_centroids)
             print ("lengths of cents: ", len(self.left_centroid_list), len(self.right_centroid_list))
 
-        #self.find_window_centroids()
         self.radius_of_curvature()
         if plotfig:
             self.display_lane_centers()
+
+        if (self.left_fail_count >= self.fail_count_tolerance) or (self.right_fail_count >= self.fail_count_tolerance):
+            return True
+        else:
+            return False
+
+    def reset_lanes(self):
+        """
+        recalculate lanes following detection failure
+        """
+        print ("resetting saved lane info ----------------------")
+        self.left_maxval = -100
+        self.right_maxval = -100
+        self.left_fail_count = 0
+        self.right_fail_count = 0
+        self.left_centroid_list = []
+        self.right_centroid_list = []
+        self.window_centroids = []
