@@ -12,11 +12,15 @@ class LaneSeries(Lane):
         self.window_height = 80
         self.left_maxval = -100
         self.right_maxval = -100
+        self.len_centroid_list = 5
+        self.left_centroid_list = []
+        self.right_centroid_list = []
         self.left_pos = None
         self.right_pos = None
         self.frame_counter = 0
         self.intens_accep_frac = 20
         self.lane_shift_allowance = 50
+
         self.window_centroids = []
         self.stripes = []
         self.roc = 0
@@ -141,6 +145,8 @@ class LaneSeries(Lane):
         rx = right_fit[0]*eval_y**2 + right_fit[1]*eval_y + right_fit[2]
 
         self.window_centroids = np.array([(l, r) for l, r in zip(lx, rx)])
+        self.left_centroid_list.append(self.window_centroids[:,0])
+        self.right_centroid_list.append(self.window_centroids[:,1])
 
         sanity = self.window_centroids[:,1] - self.window_centroids[:,0]
         assert (sanity > 0).all()
@@ -453,22 +459,39 @@ class LaneSeries(Lane):
         save the new centroids if acceptance creiteria is met
         """
         l_delta, r_delta = self.check_new_centroids(cents)
+        if l_delta < self.lane_shift_allowance:
+            if len(self.left_centroid_list) < self.len_centroid_list:
+                self.left_centroid_list.append(cents[:,0])
+            else:
+                print ("replacing L")
+                self.left_centroid_list.pop(0)
+                self.left_centroid_list.append(cents[:,0])
+
+        if r_delta < self.lane_shift_allowance:
+            if len(self.right_centroid_list) < self.len_centroid_list:
+                self.right_centroid_list.append(cents[:,1])
+            else:
+                print ("replacing R")
+                self.right_centroid_list.pop(0)
+                self.right_centroid_list.append(cents[:,1])
+
+        self.window_centroids[:,0] = np.mean(self.left_centroid_list, axis=0)
+        self.window_centroids[:,1] = np.mean(self.right_centroid_list, axis=0)
 
     def process(self, plotfig=False):
         """
         executes a step of the lane detection pipeline
         """
         first_frame = (self.left_maxval < 0) and (self.right_maxval < 0)
-        print ("counter = ", self.frame_counter, )
         if first_frame:
             print ("-----finding lane centers for the first time-----")
             self.find_window_centroids_first_frame()
         else:
-            print ("---moving onto the next frame---")
+            print ("---moving onto frame---  ", self.frame_counter)
             new_centroids = self.find_window_centroids_this_frame()
             print ("new centroids: ", new_centroids)
-            #l_delta, r_delta = self.check_new_centroids(new_centroids)
             self.save_new_centroids(new_centroids)
+            print ("lengths of cents: ", len(self.left_centroid_list), len(self.right_centroid_list))
 
         #self.find_window_centroids()
         self.radius_of_curvature()
