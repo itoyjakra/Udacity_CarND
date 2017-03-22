@@ -33,7 +33,7 @@ def data_gen(samples, batch_size=32):
             y_train = np.array(angles)
             yield shuffle(X_train, y_train)
 
-def generate_training_batch(images, angles, batch_size):
+def generate_training_batch(images, angles, batch_size, image_augment=True):
     """
     yield a batch of data for training
     """
@@ -44,6 +44,8 @@ def generate_training_batch(images, angles, batch_size):
         for i in range(batch_size):
             index = np.random.randint(len(angles))
             img = cv2.imread(images[index])
+            if image_augment:
+                img = augment_brightness_camera_images(img)
             angle = angles[index]
             if np.random.randint(2) == 1:
                 img = flip_axis(img, 1)
@@ -73,6 +75,19 @@ def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Dat
                 angles.extend([steering_angle+steering_offset, steering_angle-steering_offset])
 
     return (images, angles)
+
+def augment_brightness_camera_images(image):
+    """
+    randomly change brightness of the image
+    """
+    image1 = cv2.cvtColor(image,cv2.COLOR_RGB2HSV)
+    image1 = np.array(image1, dtype = np.float64)
+    random_bright = .5+np.random.uniform()
+    image1[:,:,2] = image1[:,:,2]*random_bright
+    image1[:,:,2][image1[:,:,2]>255]  = 255
+    image1 = np.array(image1, dtype = np.uint8)
+    image1 = cv2.cvtColor(image1,cv2.COLOR_HSV2RGB)
+    return image1
 
 def get_data():
     """
@@ -180,7 +195,7 @@ def model_nvidia(camera_format, crop=None):
 
     return model
 
-def train_model(model, data, n_batch=32, validate=False):
+def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=None):
     """
     train model on supplied data
     """
@@ -199,28 +214,37 @@ def train_model(model, data, n_batch=32, validate=False):
                         #validation_steps=len(val_X),
                         epochs=2)
     '''
+    if num_samples is None:
+        num_samples = len(X)
+
     if validate:
         train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
         train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
         validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
         model.fit_generator(train_generator,
-                        steps_per_epoch=len(train_X),
+                        steps_per_epoch=num_samples,
                         validation_data=validation_generator,
                         validation_steps=len(val_X),
-                        epochs=1)
+                        epochs=epochs)
     else:
-        train_generator = generate_training_batch(X, y, batch_size=32)
-        model.fit_generator(train_generator, steps_per_epoch=len(X), epochs=2)
+        train_generator = generate_training_batch(X, y, batch_size=n_batch)
+        model.fit_generator(train_generator, 
+                        steps_per_epoch=num_samples,
+                        epochs=epochs)
         #model.fit_generator(train_generator, steps_per_epoch=len(y), epochs=3)
 
     return model
 
 if __name__ == "__main__":
-    #data = get_data()
-    steering_offset = 0.25
-    data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv')
+    steering_offset = 0.3
+    n_sample = 10000
+    n_epochs = 1
+    batch_size = 64
     preload_model = None
-    #preload_model = 'checkpoints/nvidia_model_03.h5'
+    preload_model = 'checkpoints/nvidia_model_03.h5'
+
+    data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv',
+            include_center=True)
     if preload_model is not None:
         try:
             model = load_model(preload_model)
@@ -228,7 +252,6 @@ if __name__ == "__main__":
             print ("cannot find model to load")
     else:
         model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
-    #model = model_comma_ai((160, 320, 3), crop=(50, 20, 0, 0))
-    train_model(model, data, n_batch=32)
-    model.save('nvidia_model_04.h5')
-    # predict_on_new_data()
+
+    model = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample)
+    model.save('nvidia_model_03a.h5')
