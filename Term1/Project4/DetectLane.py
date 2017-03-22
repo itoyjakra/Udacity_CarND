@@ -168,10 +168,6 @@ def video_pipeline(video_file, params):
     war = im.process(M)
 
     lane = LaneSeries(im.image, war)
-    print (lane.left_maxval, lane.right_maxval, lane.left_pos, lane.right_pos)
-    lane.find_window_centroids()
-    print (lane.left_maxval, lane.right_maxval, lane.left_pos, lane.right_pos)
-
 
     image_sequence = []
     for i, f, in enumerate(video_clip.iter_frames()):
@@ -180,19 +176,25 @@ def video_pipeline(video_file, params):
         war = im.process(M)
 
         lane.add_frame(im.image, war)
-        lane.process()
+        failure = lane.process()
         lane.plot_lane(Minv, plotfig=False)
         img = lane.lane_on_image
 
         side = "right" if lane.vehicle_offset > 0 else "left"
-        cv2.putText(img, "Radius of Curvature = %.1f m" % lane.roc, (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
+        cv2.putText(img, "Radius of Curvature = %.1f m, frame no. %d" % (lane.roc, lane.frame_counter), (70, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
         cv2.putText(img, "Vehicle is %.2f m %s of the center" % (np.abs(lane.vehicle_offset), side), (70, 170), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255))
         image_sequence.append(img)
 
-        sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
-        sys.stdout.flush()
+        if failure:
+            lane.reset_lanes()
+
+        #if i > 80:
+        #    break
+
+        #sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
+        #sys.stdout.flush()
     clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
-    clip.write_videofile("test_images/chal_test.mp4", audio=False)
+    clip.write_videofile("test_images/dump_video.mp4", audio=False)
 
 def main():
     # TODO
@@ -203,8 +205,8 @@ def main():
     params = (mtx, dist, dst, src, M, Minv)
 
     #one_frame_pipeline("test_images/chal_vid_frame_001.jpg", params, plotfig=True)
-    video_pipeline_simple("test_images/project_video.mp4", params)
-    video_pipeline("test_images/challenge_video.mp4", params)
-    
+    video_pipeline("test_images/project_video.mp4", params)
+    #video_pipeline("test_images/challenge_video.mp4", params)
+
 if __name__ == '__main__':
     main()
