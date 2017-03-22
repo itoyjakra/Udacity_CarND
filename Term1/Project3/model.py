@@ -196,7 +196,7 @@ def model_nvidia(camera_format, crop=None):
 
     return model
 
-def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=None):
+def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=10000):
     """
     train model on supplied data
     """
@@ -215,8 +215,8 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=N
                         #validation_steps=len(val_X),
                         epochs=2)
     '''
-    if num_samples is None:
-        num_samples = len(X)
+    num_train = 0.8*num_samples
+    num_valid = 0.2*num_samples
 
     if validate:
         train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
@@ -224,9 +224,9 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=N
         train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
         validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
         history = model.fit_generator(train_generator,
-                        steps_per_epoch=num_samples,
+                        steps_per_epoch=num_train,
                         validation_data=validation_generator,
-                        validation_steps=len(val_X),
+                        validation_steps=num_valid,
                         epochs=epochs)
     else:
         train_generator = generate_training_batch(X, y, batch_size=n_batch)
@@ -237,34 +237,63 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=N
 
     return model, history
 
+def tune_model():
+    dir_name='Udacity_Data/data'
+    log_file='driving_log.csv'
+    n_sample = 10000
+    n_epochs = 3
+    batch_size = 32
+
+    for steering_offset in [0.2, 0.25, 0.3, 0.35, 0.4]:
+        data = get_log_data(steering_offset=steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
+        print ('steering offset = ', steering_offset)
+        model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+        model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
+        model_name = 'nvidia_model' + '_nodrop_steer_' + str(steering_offset) + '.h5'
+        training_history = 'nvidia_model' + '_nodrop_steer_' + str(steering_offset) + '.pkl'
+        print ("saving the model in %s" % model_name)
+        model.save(model_name)
+        print ("saving the history in %s" % training_history)
+        print (history.history['loss'])
+        print (history.history['val_loss'])
+        with open(training_history, 'wb') as fid:
+            pickle.dump((history.history['loss'], history.history['val_loss']), fid)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detecting cars in a video')
     parser.add_argument('-s','--save_model', help='Save the trained model', default='model_dump.h5')
     parser.add_argument('-y','--save_history', help='Save the training history', default='history_dump.pkl')
+    #parser.add_argument('-t','--tune_model', help='Tune the training parameters', default=False)
+    parser.add_argument('-t', '--tune_model', action='store_true')
     args = vars(parser.parse_args())
 
-    steering_offset = 0.3
-    n_sample = 10000
-    n_epochs = 5
-    batch_size = 64
-    preload_model = None
-    #preload_model = 'checkpoints/nvidia_model_03.h5'
-
-    data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv',
-            include_center=True)
-    if preload_model is not None:
-        try:
-            model = load_model(preload_model)
-        except:
-            print ("cannot find model to load")
+    if  args['tune_model']:
+        tune_model()
     else:
-        model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+        train_model()
 
-    model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
-    print ("saving the model in %s" % args['save_model'])
-    model.save(args['save_model'])
-    print ("saving the history in %s" % args['save_history'])
-    print (history.history['loss'])
-    print (history.history['val_loss'])
-    with open(args['save_history'], 'wb') as fid:
-        pickle.dump((history.history['loss'], history.history['val_loss']), fid)
+        steering_offset = 0.3
+        n_sample = 10000
+        n_epochs = 5
+        batch_size = 64
+        preload_model = None
+        #preload_model = 'checkpoints/nvidia_model_03.h5'
+    
+        data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv',
+                include_center=True)
+        if preload_model is not None:
+            try:
+                model = load_model(preload_model)
+            except:
+                print ("cannot find model to load")
+        else:
+            model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+    
+        model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
+        print ("saving the model in %s" % args['save_model'])
+        model.save(args['save_model'])
+        print ("saving the history in %s" % args['save_history'])
+        print (history.history['loss'])
+        print (history.history['val_loss'])
+        with open(args['save_history'], 'wb') as fid:
+            pickle.dump((history.history['loss'], history.history['val_loss']), fid)
