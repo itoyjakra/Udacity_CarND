@@ -1,6 +1,8 @@
 import os
 import csv
 import cv2
+import argparse
+import _pickle as pickle
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Flatten, Dropout
 from keras.layers import Cropping2D, Lambda, ELU
@@ -37,7 +39,6 @@ def generate_training_batch(images, angles, batch_size, image_augment=True):
     """
     yield a batch of data for training
     """
-    print ("number of training samples  = ", len(images))
     while 1:
         batch_images = []
         batch_angles = []
@@ -176,15 +177,15 @@ def model_nvidia(camera_format, crop=None):
     model.add(Flatten())
 
     model.add(Dense(100))
-    model.add(Dropout(0.5))
+    model.add(Dropout(1.0))
     model.add(ELU())
 
     model.add(Dense(50))
-    model.add(Dropout(0.5))
+    model.add(Dropout(1.0))
     model.add(ELU())
 
     model.add(Dense(10))
-    model.add(Dropout(0.5))
+    model.add(Dropout(1.0))
     model.add(ELU())
 
     model.add(Dense(1))
@@ -219,29 +220,35 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=N
 
     if validate:
         train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
+        print ('training data size = %d\tvalidation data size%d' %(len(train_y), len(val_y)))
         train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
         validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
-        model.fit_generator(train_generator,
+        history = model.fit_generator(train_generator,
                         steps_per_epoch=num_samples,
                         validation_data=validation_generator,
                         validation_steps=len(val_X),
                         epochs=epochs)
     else:
         train_generator = generate_training_batch(X, y, batch_size=n_batch)
-        model.fit_generator(train_generator, 
+        history = model.fit_generator(train_generator, 
                         steps_per_epoch=num_samples,
                         epochs=epochs)
         #model.fit_generator(train_generator, steps_per_epoch=len(y), epochs=3)
 
-    return model
+    return model, history
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Detecting cars in a video')
+    parser.add_argument('-s','--save_model', help='Save the trained model', default='model_dump.h5')
+    parser.add_argument('-y','--save_history', help='Save the training history', default='history_dump.pkl')
+    args = vars(parser.parse_args())
+
     steering_offset = 0.3
     n_sample = 10000
-    n_epochs = 1
+    n_epochs = 5
     batch_size = 64
     preload_model = None
-    preload_model = 'checkpoints/nvidia_model_03.h5'
+    #preload_model = 'checkpoints/nvidia_model_03.h5'
 
     data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv',
             include_center=True)
@@ -253,5 +260,11 @@ if __name__ == "__main__":
     else:
         model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
 
-    model = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample)
-    model.save('nvidia_model_03a.h5')
+    model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
+    print ("saving the model in %s" % args['save_model'])
+    model.save(args['save_model'])
+    print ("saving the history in %s" % args['save_history'])
+    print (history.history['loss'])
+    print (history.history['val_loss'])
+    with open(args['save_history'], 'wb') as fid:
+        pickle.dump((history.history['loss'], history.history['val_loss']), fid)
