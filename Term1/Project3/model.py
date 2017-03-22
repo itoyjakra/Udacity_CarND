@@ -259,41 +259,40 @@ def tune_model():
         with open(training_history, 'wb') as fid:
             pickle.dump((history.history['loss'], history.history['val_loss']), fid)
 
+def train_single_model(args):
+    dir_name='Udacity_Data/data'
+    log_file='driving_log.csv'
+    n_sample = 10000
+    n_epochs = 3
+    batch_size = 32
+
+    data = get_log_data(steering_offset=steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
+    if args['preload_model'] is not None:
+        try:
+            model = load_model(preload_model)
+        except:
+            print ("cannot find model to load")
+    else:
+        model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
+
+    model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
+    print ("saving the model in %s" % args['save_model'])
+    model.save(args['save_model'])
+    print ("saving the history in %s" % args['save_history'])
+    print (history.history['loss'])
+    print (history.history['val_loss'])
+    with open(args['save_history'], 'wb') as fid:
+        pickle.dump((history.history['loss'], history.history['val_loss']), fid)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Detecting cars in a video')
     parser.add_argument('-s','--save_model', help='Save the trained model', default='model_dump.h5')
     parser.add_argument('-y','--save_history', help='Save the training history', default='history_dump.pkl')
-    #parser.add_argument('-t','--tune_model', help='Tune the training parameters', default=False)
     parser.add_argument('-t', '--tune_model', action='store_true')
+    parser.add_argument('-p', '--preload_model', default=None)
     args = vars(parser.parse_args())
 
     if  args['tune_model']:
         tune_model()
     else:
-        train_model()
-
-        steering_offset = 0.3
-        n_sample = 10000
-        n_epochs = 5
-        batch_size = 64
-        preload_model = None
-        #preload_model = 'checkpoints/nvidia_model_03.h5'
-    
-        data = get_log_data(steering_offset=steering_offset, dir_name='Udacity_Data/data', log_file='driving_log.csv',
-                include_center=True)
-        if preload_model is not None:
-            try:
-                model = load_model(preload_model)
-            except:
-                print ("cannot find model to load")
-        else:
-            model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
-    
-        model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
-        print ("saving the model in %s" % args['save_model'])
-        model.save(args['save_model'])
-        print ("saving the history in %s" % args['save_history'])
-        print (history.history['loss'])
-        print (history.history['val_loss'])
-        with open(args['save_history'], 'wb') as fid:
-            pickle.dump((history.history['loss'], history.history['val_loss']), fid)
+        train_single_model(args)
