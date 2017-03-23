@@ -8,6 +8,7 @@ from keras.layers.core import Dense, Activation, Flatten, Dropout
 from keras.layers import Cropping2D, Lambda, ELU
 from keras.layers.convolutional import Convolution2D
 from keras.layers.pooling import MaxPooling2D
+from keras.callbacks import ModelCheckpoint
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
@@ -177,15 +178,15 @@ def model_nvidia(camera_format, crop=None):
     model.add(Flatten())
 
     model.add(Dense(100))
-    model.add(Dropout(1.0))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(50))
-    model.add(Dropout(1.0))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(10))
-    model.add(Dropout(1.0))
+    model.add(Dropout(0.5))
     model.add(ELU())
 
     model.add(Dense(1))
@@ -196,25 +197,11 @@ def model_nvidia(camera_format, crop=None):
 
     return model
 
-def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=10000):
+def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=10000, check_path='dump.hd5'):
     """
     train model on supplied data
     """
     X, y = data
-    '''
-    #train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
-    #train_samples, validation_samples = train_test_split(data, test_size=0.2)
-    #train_generator = data_gen(train_samples, batch_size=32)
-    #validation_generator = data_gen(validation_samples, batch_size=32)
-    #train_generator = generate_training_batch(train_X, train_y, batch_size=32)
-    #validation_generator = generate_training_batch(val_X, val_y, batch_size=32)
-    #model.fit_generator(train_generator, samples_per_epoch=len(y), nb_epoch=2)
-                        steps_per_epoch=len(X),
-                        #steps_per_epoch=len(train_X),
-                        #validation_data=validation_generator,
-                        #validation_steps=len(val_X),
-                        epochs=2)
-    '''
     num_train = 0.8*num_samples
     num_valid = 0.2*num_samples
 
@@ -223,10 +210,13 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=1
         print ('training data size = %d\tvalidation data size%d' %(len(train_y), len(val_y)))
         train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
         validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
+        checkpointer = ModelCheckpoint(filepath=check_path, verbose=1, save_best_only=True)
+
         history = model.fit_generator(train_generator,
                         steps_per_epoch=num_train,
                         validation_data=validation_generator,
                         validation_steps=num_valid,
+                        callbacks=[checkpointer],
                         epochs=epochs)
     else:
         train_generator = generate_training_batch(X, y, batch_size=n_batch)
@@ -244,15 +234,16 @@ def tune_model():
     n_epochs = 3
     batch_size = 32
 
-    for steering_offset in [0.2, 0.25, 0.3, 0.35, 0.4]:
+    for steering_offset in [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]:
         data = get_log_data(steering_offset=steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
         print ('steering offset = ', steering_offset)
         model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
-        model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, num_samples=n_sample, validate=True)
-        model_name = 'nvidia_model' + '_nodrop_steer_' + str(steering_offset) + '.h5'
-        training_history = 'nvidia_model' + '_nodrop_steer_' + str(steering_offset) + '.pkl'
-        print ("saving the model in %s" % model_name)
-        model.save(model_name)
+        model_name = 'nvidia_model' + '_drop_0.5_steer_' + str(steering_offset) + '.h5'
+        model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, 
+                num_samples=n_sample, validate=True, check_path='history/'+model_name)
+        training_history = 'history/nvidia_model' + '_drop_0.5_steer_' + str(steering_offset) + '.pkl'
+        #print ("saving the model in %s" % model_name)
+        #model.save(model_name)
         print ("saving the history in %s" % training_history)
         print (history.history['loss'])
         print (history.history['val_loss'])
