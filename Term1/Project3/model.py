@@ -17,28 +17,6 @@ from sklearn.utils import shuffle
 from keras.preprocessing.image import flip_axis
 from keras.optimizers import adam
 
-def data_gen(samples, batch_size=32):
-    """
-    legacy generator
-    """
-    num_samples = len(samples)
-    print ("number of samples  = ", num_samples)
-    while 1:
-        for offset in range(0, num_samples, batch_size):
-            batch_samples = samples[offset:offset+batch_size]
-
-            images = []
-            angles = []
-            for batch_sample in batch_samples:
-                name = 'Udacity_Data/data/IMG/'+batch_sample[0].split('/')[-1]
-                center_image = cv2.imread(name)
-                center_angle = float(batch_sample[3])
-                images.append(center_image)
-                angles.append(center_angle)
-
-            X_train = np.array(images)
-            y_train = np.array(angles)
-            yield shuffle(X_train, y_train)
 
 def generate_training_batch(images, angles, batch_size, image_augment=True):
     """
@@ -50,9 +28,11 @@ def generate_training_batch(images, angles, batch_size, image_augment=True):
         for i in range(batch_size):
             index = np.random.randint(len(angles))
             img = cv2.imread(images[index])
+            # add random brightness
             if image_augment:
                 img = augment_brightness_camera_images(img)
             angle = angles[index]
+            # randomly flip the image horizontally
             if np.random.randint(2) == 1:
                 img = flip_axis(img, 1)
                 angle = -angle
@@ -63,7 +43,7 @@ def generate_training_batch(images, angles, batch_size, image_augment=True):
 
 def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Data/data', log_file='driving_log.csv'):
     """
-    collect image file names and steering angles
+    collect image file names and corresponding steering angles
     """
     images = []
     angles = []
@@ -96,18 +76,6 @@ def augment_brightness_camera_images(image):
     image1 = np.array(image1, dtype = np.uint8)
     image1 = cv2.cvtColor(image1,cv2.COLOR_HSV2RGB)
     return image1
-
-def get_data():
-    """
-    legacy - capture image and steering data
-    """
-    samples = []
-    with open('Udacity_Data/data/driving_log.csv') as csvfile:
-        reader = csv.reader(csvfile)
-        for line in reader:
-            samples.append(line)
-
-    return samples
 
 def model_comma_ai(camera_format, crop=None):
     """
@@ -212,7 +180,6 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=1
 
     if validate:
         train_X, val_X, train_y, val_y = train_test_split(X, y, test_size=0.2)
-        print ('training data size = %d\tvalidation data size%d' %(len(train_y), len(val_y)))
         train_generator = generate_training_batch(train_X, train_y, batch_size=n_batch)
         validation_generator = generate_training_batch(val_X, val_y, batch_size=n_batch)
         checkpointer = ModelCheckpoint(filepath=check_path, verbose=1, save_best_only=True)
@@ -233,15 +200,16 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=1
 
 def tune_model():
     """
-    pick the best steering offset
+    tune model to pick the best steering offset
     """
     dir_name='Udacity_Data/data'
     log_file='driving_log.csv'
     n_sample = 10000
     n_epochs = 3
     batch_size = 32
+    offset_range = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
 
-    for steering_offset in [0.15, 0.2, 0.25, 0.3, 0.35, 0.4]:
+    for steering_offset in offset_range:
         data = get_log_data(steering_offset=steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
         print ('steering offset = ', steering_offset)
         model = model_nvidia((160, 320, 3), crop=(50, 20, 0, 0))
@@ -255,7 +223,7 @@ def tune_model():
 
 def train_single_model(args):
     """
-    train a single model
+    train a model with supplied parameters
     """
     dir_name='Udacity_Data/data'
     log_file='driving_log.csv'
