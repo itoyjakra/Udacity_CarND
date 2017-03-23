@@ -3,6 +3,7 @@ import csv
 import cv2
 import argparse
 import _pickle as pickle
+from keras import initializers
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Flatten, Dropout
 from keras.layers import Cropping2D, Lambda, ELU
@@ -17,6 +18,9 @@ from keras.preprocessing.image import flip_axis
 from keras.optimizers import adam
 
 def data_gen(samples, batch_size=32):
+    """
+    legacy generator
+    """
     num_samples = len(samples)
     print ("number of samples  = ", num_samples)
     while 1:
@@ -81,6 +85,8 @@ def get_log_data(steering_offset=0.3, include_center=True, dir_name='Udacity_Dat
 def augment_brightness_camera_images(image):
     """
     randomly change brightness of the image
+    using code from: 
+    https://chatbotslife.com/using-augmentation-to-mimic-human-driving-496b569760a9#.aq3jet38c
     """
     image1 = cv2.cvtColor(image,cv2.COLOR_RGB2HSV)
     image1 = np.array(image1, dtype = np.float64)
@@ -93,7 +99,7 @@ def augment_brightness_camera_images(image):
 
 def get_data():
     """
-    capture image and steering data
+    legacy - capture image and steering data
     """
     samples = []
     with open('Udacity_Data/data/driving_log.csv') as csvfile:
@@ -177,15 +183,15 @@ def model_nvidia(camera_format, crop=None):
     model.add(ELU())
     model.add(Flatten())
 
-    model.add(Dense(100))
+    model.add(Dense(100, kernel_initializer=initializers.glorot_normal()))
     model.add(Dropout(0.5))
     model.add(ELU())
 
-    model.add(Dense(50))
+    model.add(Dense(50, kernel_initializer=initializers.glorot_normal()))
     model.add(Dropout(0.5))
     model.add(ELU())
 
-    model.add(Dense(10))
+    model.add(Dense(10, kernel_initializer=initializers.glorot_normal()))
     model.add(Dropout(0.5))
     model.add(ELU())
 
@@ -193,7 +199,6 @@ def model_nvidia(camera_format, crop=None):
 
     adam_opt = adam(lr=0.001, decay=1.0e-6)
     model.compile(optimizer=adam_opt, loss="mse")
-    #model.compile(optimizer="adam", loss="mse")
 
     return model
 
@@ -223,11 +228,13 @@ def train_model(model, data, epochs=3, n_batch=32, validate=False, num_samples=1
         history = model.fit_generator(train_generator, 
                         steps_per_epoch=num_samples,
                         epochs=epochs)
-        #model.fit_generator(train_generator, steps_per_epoch=len(y), epochs=3)
 
     return model, history
 
 def tune_model():
+    """
+    pick the best steering offset
+    """
     dir_name='Udacity_Data/data'
     log_file='driving_log.csv'
     n_sample = 10000
@@ -242,25 +249,25 @@ def tune_model():
         model, history = train_model(model, data, epochs=n_epochs, n_batch=batch_size, 
                 num_samples=n_sample, validate=True, check_path='history/'+model_name)
         training_history = 'history/nvidia_model' + '_drop_0.5_steer_' + str(steering_offset) + '.pkl'
-        #print ("saving the model in %s" % model_name)
-        #model.save(model_name)
         print ("saving the history in %s" % training_history)
-        print (history.history['loss'])
-        print (history.history['val_loss'])
         with open(training_history, 'wb') as fid:
             pickle.dump((history.history['loss'], history.history['val_loss']), fid)
 
 def train_single_model(args):
+    """
+    train a single model
+    """
     dir_name='Udacity_Data/data'
     log_file='driving_log.csv'
     n_sample = 10000
     n_epochs = 3
     batch_size = 32
+    best_steering_offset = 0.4
 
-    data = get_log_data(steering_offset=steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
+    data = get_log_data(steering_offset=best_steering_offset, dir_name=dir_name, log_file=log_file, include_center=True)
     if args['preload_model'] is not None:
         try:
-            model = load_model(preload_model)
+            model = load_model(args['preload_model'])
         except:
             print ("cannot find model to load")
     else:
@@ -276,7 +283,7 @@ def train_single_model(args):
         pickle.dump((history.history['loss'], history.history['val_loss']), fid)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Detecting cars in a video')
+    parser = argparse.ArgumentParser(description='Drive car autonomously')
     parser.add_argument('-s','--save_model', help='Save the trained model', default='model_dump.h5')
     parser.add_argument('-y','--save_history', help='Save the training history', default='history_dump.pkl')
     parser.add_argument('-t', '--tune_model', action='store_true')
