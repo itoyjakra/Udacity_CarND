@@ -89,8 +89,7 @@ class Frame(object):
         """
         Select one channel of the RGB color scheme and return a binany image
         """
-        rgb = cv2.cvtColor(self.image, cv2.COLOR_RGB2HSV)
-        chan_im = rgb[:,:,channel]
+        chan_im = self.image[:,:,channel]
         binary_output = np.zeros_like(chan_im)
         binary_output[(chan_im > thresh[0]) & (chan_im <= thresh[1])] = 1
 
@@ -106,6 +105,7 @@ class Frame(object):
         ch1 = self.hsv_select(thresh=(150, 255), channel=1)
         ch2 = self.hsv_select(thresh=(200, 255), channel=2)
         ch3 = self.rgb_select(thresh=(0, 30))
+        ch3 = self.rgb_select(thresh=(210, 255))
 
         # apply Sobel gradient thresholds
         dir_binary = self.dir_thresh(sobel_kernel=15, thresh=(0.5, 1.1))
@@ -117,6 +117,7 @@ class Frame(object):
         combined[(mag_binary == 1) & (dir_binary == 1) | (sobel_binary == 1)] = 1
         combined = combined.astype(np.uint8)
         ch = ((ch1 | ch2) & ch3) | combined
+        ch = ch3 | combined
 
         if plotfig:
             fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
@@ -134,4 +135,4 @@ class Frame(object):
             ax2.imshow(warped, cmap='gray')
             plt.show()
 
-        return warped
+        return warped, ch

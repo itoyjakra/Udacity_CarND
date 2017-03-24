@@ -7,8 +7,9 @@ import matplotlib.image as mpimg
 from Frame import Frame
 from Lane import Lane
 from LaneSeries import LaneSeries
-from moviepy.editor import VideoFileClip, ImageSequenceClip
+from moviepy.editor import VideoFileClip, ImageSequenceClip, clips_array
 import sys
+import _pickle as pickle
 
 def plot_image(im, cmap=None):
     plt.figure()
@@ -96,8 +97,9 @@ def one_frame_pipeline(image, params, plotfig=False):
 
     # apply color channel thresholds
     ch1 = im.hsv_select(thresh=(150, 255), channel=1)
-    ch2 = im.hsv_select(thresh=(200, 255), channel=2)
-    ch3 = im.rgb_select(thresh=(0, 30))
+    ch1 = im.hsv_select(thresh=(15, 55), channel=0)
+    ch2 = im.hsv_select(thresh=(220, 255), channel=2)
+    ch3 = im.rgb_select(thresh=(210, 255))
 
     # apply Sobel gradient thresholds
     dir_binary = im.dir_thresh(sobel_kernel=15, thresh=(0.5, 1.1))
@@ -109,6 +111,7 @@ def one_frame_pipeline(image, params, plotfig=False):
     combined[(mag_binary == 1) & (dir_binary == 1) | (sobel_binary == 1)] = 1
     combined = combined.astype(np.uint8)
     ch = ((ch1 | ch2) & ch3) | combined
+    ch = ch3 | combined
 
     if plotfig:
         fig, (ax1, ax2) = plt.subplots(1, 2, sharex=True, figsize=[24, 6])
@@ -137,7 +140,7 @@ def one_frame_pipeline(image, params, plotfig=False):
     roc, offset = lane.radius_of_curvature(cents)
     if plotfig:
         lane.display_lane_centers(cents)
-    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents, plotfig=False)
+    return lane.plot_lane(Minv, (roc, offset), window_centroids=cents, plotfig=plotfig), plt.imshow(warped, cmap='gray')
 
 def video_pipeline_simple(video_file, params):
     video_clip = VideoFileClip(video_file)
@@ -151,8 +154,8 @@ def video_pipeline_simple(video_file, params):
         image_sequence.append(img)
         sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
         sys.stdout.flush()
-        #if i > 50:
-        #    break
+        if i > 650:
+            break
 
     clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
     clip.write_videofile("test_images/chal_test.mp4", audio=False)
@@ -165,7 +168,7 @@ def video_pipeline(video_file, params):
     first_frame = video_clip.get_frame(t=0)
     undist = cv2.undistort(first_frame, mtx, dist, None, mtx)
     im = Frame(undist)
-    war = im.process(M)
+    war, _ = im.process(M)
 
     lane = LaneSeries(im.image, war)
 
@@ -173,7 +176,7 @@ def video_pipeline(video_file, params):
     for i, f, in enumerate(video_clip.iter_frames()):
         undist = cv2.undistort(f, mtx, dist, None, mtx)
         im = Frame(undist)
-        war = im.process(M)
+        war, bin_im = im.process(M)
 
         lane.add_frame(im.image, war)
         failure = lane.process()
@@ -187,24 +190,24 @@ def video_pipeline(video_file, params):
 
         if failure:
             lane.reset_lanes()
-
-        #if i > 80:
-        #    break
-
-        #sys.stdout.write("\rprocessing Frame Number  %i" % (i+1))
-        #sys.stdout.flush()
+        
     clip = ImageSequenceClip(image_sequence, fps=video_clip.fps)
     clip.write_videofile("test_images/dump_video.mp4", audio=False)
 
 def main():
-    # TODO
-    # 1. in find_window_centroids generalize the bottom quarter selection
-    mtx, dist = CalibrateCamera()
-    M, dst, src = PerspectiveTransform(plotfig=False)
-    Minv = cv2.getPerspectiveTransform(dst, src)
-    params = (mtx, dist, dst, src, M, Minv)
+    load_param = True
+    if load_param:
+        with open('params.pkl', 'rb') as fid:
+            params = pickle.load(fid)
+    else:
+        mtx, dist = CalibrateCamera()
+        M, dst, src = PerspectiveTransform(plotfig=False)
+        Minv = cv2.getPerspectiveTransform(dst, src)
+        params = (mtx, dist, dst, src, M, Minv)
+        with open('params.pkl', 'wb') as fid:
+            pickle.dump(params, fid)
 
-    #one_frame_pipeline("test_images/chal_vid_frame_001.jpg", params, plotfig=True)
+    #one_frame_pipeline("test/frame102.jpg", params, plotfig=True)
     video_pipeline("test_images/project_video.mp4", params)
     #video_pipeline("test_images/challenge_video.mp4", params)
 
